@@ -133,19 +133,27 @@ describe("planTrip", () => {
     timeout.mockRestore();
   });
 
-  it("stays quiet when the plan is cancelled during the relay", async () => {
-    const cancel = new AbortController();
-    serve([
-      limited,
-      ({ init }) =>
-        new Promise<Response>((_, reject) => {
-          init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
-          cancel.abort();
-        }),
-    ]);
-    const error = await planTrip(input, () => undefined, cancel.signal).catch((e: unknown) => e);
-    expect(error).not.toBeInstanceOf(RequestFailed);
-    expect(error).toMatchObject({ name: "AbortError" });
+  it("stays quiet when the plan is cancelled during the relay, with or without AbortSignal.any", async () => {
+    const any = AbortSignal.any;
+    for (const native of [true, false]) {
+      if (!native) Object.defineProperty(AbortSignal, "any", { value: undefined, configurable: true });
+      const cancel = new AbortController();
+      serve([
+        limited,
+        ({ init }) =>
+          new Promise<Response>((_, reject) => {
+            init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+            cancel.abort();
+          }),
+      ]);
+      try {
+        const error = await planTrip(input, () => undefined, cancel.signal).catch((e: unknown) => e);
+        expect(error).not.toBeInstanceOf(RequestFailed);
+        expect(error).toMatchObject({ name: "AbortError" });
+      } finally {
+        Object.defineProperty(AbortSignal, "any", { value: any, configurable: true, writable: true });
+      }
+    }
   });
 
   it("turns the error envelope into a RequestFailed with the field messages", async () => {

@@ -45,6 +45,20 @@ const RELAY_ROUNDS = 2;
 const RELAY_TIMEOUT_MS = 30_000;
 const FORECAST_DOWN = "The forecast could not be fetched, by the server or by this browser. Try again in a minute.";
 
+/** A signal that aborts when either does: `AbortSignal.any`, or the same by hand where it is missing (Safari 17.3). */
+function either(a: AbortSignal, b: AbortSignal): AbortSignal {
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([a, b]);
+  const both = new AbortController();
+  for (const one of [a, b]) {
+    if (one.aborted) {
+      both.abort(one.reason);
+      break;
+    }
+    one.addEventListener("abort", () => both.abort(one.reason), { once: true });
+  }
+  return both.signal;
+}
+
 /** The relayed Open-Meteo query, sent from the browser: its answer, or a RequestFailed a person can read. */
 async function relayed(relay: Relay, signal: AbortSignal | undefined): Promise<unknown> {
   const timeout = AbortSignal.timeout(RELAY_TIMEOUT_MS);
@@ -54,7 +68,7 @@ async function relayed(relay: Relay, signal: AbortSignal | undefined): Promise<u
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(relay.form),
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      signal: signal ? either(signal, timeout) : timeout,
     });
     if (forecast.ok) return await forecast.json();
   } catch (exc) {
