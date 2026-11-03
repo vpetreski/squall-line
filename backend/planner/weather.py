@@ -26,6 +26,7 @@ that one request and never enters the shared cache.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from collections.abc import Mapping, Sequence
@@ -259,8 +260,8 @@ def parse(locations: Sequence[Location], body: Any, t0: int | None = None) -> di
             raise ValueError("a forecast has no hourly data")
         try:
             times = np.asarray(hourly.get("time"), dtype=np.int64).reshape(-1)
-            rows = [[np.nan if v is None else float(v) for v in _column(hourly, name, len(times))] for name in HOURLY]
-        except (TypeError, ValueError) as exc:
+            rows = [[_value(v) for v in _column(hourly, name, len(times))] for name in HOURLY]
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"a forecast is malformed ({exc})") from exc
         if len(times) == 0 or times[0] % HOUR or (np.diff(times) != HOUR).any():
             raise ValueError("forecast times are not consecutive whole hours")
@@ -268,6 +269,17 @@ def parse(locations: Sequence[Location], body: Any, t0: int | None = None) -> di
             raise ValueError("the forecast starts at an unexpected hour")
         out[_key(loc)] = (int(times[0]), np.array(rows, dtype=float))
     return out
+
+
+def _value(v: Any) -> float:
+    """One hourly value: null is a gap in the forecast, anything else must be a finite number (JSON parsers turn
+    1e999 into infinity)."""
+    if v is None:
+        return math.nan
+    number = float(v)
+    if not math.isfinite(number):
+        raise ValueError(f"{v!r} is not a finite number")
+    return number
 
 
 def _column(hourly: dict, name: str, length: int) -> list:

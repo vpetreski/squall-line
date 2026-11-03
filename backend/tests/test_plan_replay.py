@@ -221,6 +221,31 @@ def test_the_api_answers_a_spent_quota_with_the_relay(replay, monkeypatch):
     assert error["relay"]["form"]["hourly"] == ",".join(weather.HOURLY)
 
 
+@pytest.mark.parametrize(
+    ("field", "token"),
+    [("wind_speed_10m", "1e999"), ("rain", "NaN"), ("snowfall", "-Infinity"), ("time", "1e999")],
+)
+def test_the_api_rejects_a_supplied_forecast_that_is_not_finite(replay, monkeypatch, field, token):
+    fixture = load("sacramento-reno")
+    replay(_refuse_weather(fixture["exchanges"]))
+    _at_recording_time(monkeypatch, fixture)
+    client = Client(HTTP_HOST="localhost", raise_request_exception=False)
+    relayed = client.post("/api/plan", json.dumps(fixture["payload"]), content_type="application/json")
+    relay = relayed.json()["error"]["relay"]
+
+    # The browser's answer, with one location's column replaced by a number JSON parsers read as inf or NaN.
+    answer = json.loads(json.dumps(next(e["body"] for e in fixture["exchanges"] if e["service"] == "weather")))
+    column = answer[0]["hourly"][field]
+    answer[0]["hourly"][field] = ["NOT_FINITE"] * len(column)
+    body = fixture["payload"] | {"weather": {"locations": relay["locations"], "response": answer}}
+    raw = json.dumps(body).replace('"NOT_FINITE"', token)
+    out = client.post("/api/plan", raw, content_type="application/json")
+    assert out.status_code == 422
+    error = out.json()["error"]
+    assert error["code"] == "invalid_weather"
+    assert error["message"].startswith("The supplied forecast cannot be used: a forecast is malformed")
+
+
 def test_weather_that_times_out_is_relayed_too(replay, monkeypatch):
     fixture = load("sacramento-reno")
     replay([e for e in fixture["exchanges"] if e["service"] != "weather"])
