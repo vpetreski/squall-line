@@ -75,6 +75,45 @@ test.describe("planning a trip", () => {
     });
   });
 
+  test("hovers and clicks the selected route's checkpoints on the map, among every route's", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, "hover and click with a mouse");
+    await fakeApi(page);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Chicago → Atlanta" }).click();
+    const route = PLAN.routes.find((r) => r.id === recommended);
+    const index = 30;
+    const checkpoint = route?.checkpoints[index];
+    if (!route || !checkpoint) throw new Error("fixture has too few checkpoints");
+    // Pin it from the list to find it on the map: an unclamped card sits 18 px right of its point and 70 px above.
+    const card = page.getByTestId("focus-card");
+    await page.getByTestId("checkpoints").locator("button.grid").nth(index).click();
+    let box = await card.boundingBox();
+    await expect
+      .poll(async () => {
+        const before = box;
+        box = await card.boundingBox();
+        return JSON.stringify(before) === JSON.stringify(box); // still once the map has settled
+      })
+      .toBe(true);
+    if (!box) throw new Error("no checkpoint card");
+    const point = { x: box.x - 18, y: box.y + 70 };
+    await card.getByRole("button", { name: "Close" }).click();
+
+    await page.mouse.move(point.x, point.y);
+    await expect(card).toContainText(`${index + 1}/${route.checkpoints.length}`); // hovered, not pinned
+    const slider = page.getByRole("slider", { name: "Hours after departure" });
+    await slider.focus();
+    await page.keyboard.press("End");
+    await page.mouse.click(point.x, point.y);
+    await expect(card.getByRole("button", { name: "Close" })).toBeVisible();
+    await expect(card).toContainText(`Mile ${Math.round(checkpoint.mile)}`, { ignoreCase: true });
+    const expected = (Date.parse(checkpoint.eta) - Date.parse(PLAN.request.departure)) / 3_600_000;
+    expect(Number(await hoursShown(page))).toBeCloseTo(expected, 1);
+  });
+
   test("selects another route from its card", async ({ page }) => {
     await fakeApi(page);
     await page.goto("/");

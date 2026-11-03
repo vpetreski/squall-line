@@ -21,6 +21,7 @@ import { mileAt } from "../lib/timeline";
 import { useStore } from "../state/store";
 import { FocusCard } from "./FocusCard";
 import { routeGradient } from "./gradient";
+import { checkpointFeatures, OTHER_CHECKPOINTS, stackRoutes } from "./layers";
 import { mapStyle } from "./style";
 
 // MapLibre finds its worker next to its own module by default, which a bundler moves; hand it the emitted file.
@@ -143,9 +144,26 @@ export function MapView() {
     map.addControl(new NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
     map.on("load", () => {
-      for (const id of ["checkpoints", "stops", "trucks", "endpoints", "focus"]) {
+      for (const id of ["checkpoints", OTHER_CHECKPOINTS, "stops", "trucks", "endpoints", "focus"]) {
         map.addSource(id, { type: "geojson", data: EMPTY });
       }
+      // The other routes' checkpoints sit among the route lines, under the selected one (see stackRoutes).
+      map.addLayer(
+        {
+          id: OTHER_CHECKPOINTS,
+          type: "circle",
+          source: OTHER_CHECKPOINTS,
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 1.6, 6, 2.6, 10, 4],
+            "circle-color": LEVEL_MATCH,
+            "circle-opacity": 0.5,
+            "circle-stroke-color": "#08080a",
+            "circle-stroke-width": 0.75,
+            "circle-stroke-opacity": 0.5,
+          },
+        },
+        LABELS_ABOVE,
+      );
       map.addLayer({
         id: "stops",
         type: "circle",
@@ -388,18 +406,21 @@ export function MapView() {
     }
   }, [plan, geometries, grid, ready]);
 
-  // Selection: the chosen route on top and wider, its checkpoints and stops shown.
+  // Selection: the chosen route on top and wider with its checkpoints and stops, the others' checkpoints dimmed.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !plan) return;
-    const order = [...geometries].sort((a, b) => Number(a.route.id === selectedId) - Number(b.route.id === selectedId));
-    for (const g of order) {
+    stackRoutes(
+      map,
+      geometries.map((g) => g.route.id),
+      selectedId,
+      LABELS_ABOVE,
+    );
+    for (const g of geometries) {
       const id = g.route.id;
       const selected = id === selectedId;
       const lit = selected || id === hoveredId;
       if (!map.getLayer(`route-${id}`)) continue;
-      map.moveLayer(`route-${id}-casing`, LABELS_ABOVE);
-      map.moveLayer(`route-${id}`, LABELS_ABOVE);
       map.setPaintProperty(`route-${id}`, "line-width", selected ? 5.5 : lit ? 4 : 3);
       map.setPaintProperty(`route-${id}`, "line-opacity", selected ? 1 : lit ? 0.85 : 0.42);
       map.setPaintProperty(`route-${id}-casing`, "line-width", selected ? 10 : 7);
@@ -410,14 +431,13 @@ export function MapView() {
       el.dataset.selected = String(el.dataset.route === selectedId);
     }
     const route = plan.routes.find((r) => r.id === selectedId);
-    (map.getSource("checkpoints") as GeoJSONSource).setData({
-      type: "FeatureCollection",
-      features: (route?.checkpoints ?? []).map((c, index) => ({
-        type: "Feature",
-        properties: { route: route?.id, index, level: c.risk.level },
-        geometry: { type: "Point", coordinates: [c.lon, c.lat] },
-      })),
-    });
+    const checkpoints = checkpointFeatures(plan, selectedId);
+    (map.getSource("checkpoints") as GeoJSONSource).setData(checkpoints.selected);
+    (map.getSource(OTHER_CHECKPOINTS) as GeoJSONSource).setData(checkpoints.others);
+    // A route lit from its card lights its checkpoints too.
+    const hovered: ExpressionSpecification = ["case", ["==", ["get", "route"], hoveredId ?? ""], 0.9, 0.5];
+    map.setPaintProperty(OTHER_CHECKPOINTS, "circle-opacity", hovered);
+    map.setPaintProperty(OTHER_CHECKPOINTS, "circle-stroke-opacity", hovered);
     (map.getSource("stops") as GeoJSONSource).setData({
       type: "FeatureCollection",
       features: (route?.stops ?? []).map((s) => ({
