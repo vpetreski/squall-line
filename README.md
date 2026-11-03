@@ -141,13 +141,13 @@ cells inside the corridor, each one a forecast location, and the plan carries 49
 (hour 0 to hour 48) of wind, rain, snow and risk for every cell.
 
 In the browser the whole lattice is one image laid over the map by its four corners, so no cell is ever misplaced.
-Each cell is drawn as 8 x 8 pixels: the weather is interpolated in space between cell centres and in time between
+Each cell is drawn as 16 x 16 pixels: the weather is interpolated in space between cell centres and in time between
 the hourly frames, and only then coloured. The risk layer classifies the interpolated weather with the same
 published rules, so hazard areas grow, shrink and drift as the clock moves instead of jumping hour by hour, and at
 every cell centre on every hour it is exactly the level the server computed (a unit test checks every cell of every
 frame of a real stormy plan). The image's edge follows the corridor around the routes, not the grid's staircase.
-Painting a frame takes under a millisecond (0.6 to 0.8 ms measured for the Chicago to Atlanta corridor on a
-laptop), so dragging or playing the clock stays smooth; the trucks move along their routes with it.
+Painting a frame takes about 3 ms (measured for the Chicago to Atlanta corridor on a laptop), well inside a
+60 Hz frame, so dragging or playing the clock stays smooth; the trucks move along their routes with it.
 
 ### Forecast quota
 

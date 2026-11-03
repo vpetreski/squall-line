@@ -14,7 +14,7 @@ export type LayerName = "risk" | "wind" | "rain" | "snow";
 export type RGBA = [number, number, number, number];
 type Stop = [value: number, rgba: RGBA];
 
-export const SUPERSAMPLE = 8;
+export const SUPERSAMPLE = 16;
 
 /** Colour ramps keyed to the rule thresholds, so a colour change on the map is a level change in the rules. */
 export const RAMPS: Record<Exclude<LayerName, "risk">, Stop[]> = {
