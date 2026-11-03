@@ -150,10 +150,18 @@ describe("paint", () => {
     );
     const target = new Uint8ClampedArray(grid.width * grid.height * 4);
     const classify = classifier(RULES, plan.request.load_lb);
+    // Dragging the slider paints frame after frame, so what matters is the steady per-frame time: warm up first,
+    // then time every frame and judge the median, which one slow frame on a busy machine does not move.
+    for (let k = 0; k < 48; k++) paint(plan.corridor, grid, "risk", k, target, classify);
     const frames = 192;
-    const start = performance.now();
-    for (let k = 0; k < frames; k++) paint(plan.corridor, grid, "risk", (k * 48) / frames, target, classify);
-    const perFrame = (performance.now() - start) / frames;
-    expect(perFrame).toBeLessThan(12); // a 60 Hz frame is 16.7 ms
+    const times: number[] = [];
+    for (let k = 0; k < frames; k++) {
+      const start = performance.now();
+      paint(plan.corridor, grid, "risk", (k * 48) / frames, target, classify);
+      times.push(performance.now() - start);
+    }
+    times.sort((a, b) => a - b);
+    const median = times[frames / 2] as number;
+    expect(median).toBeLessThan(12); // a 60 Hz frame is 16.7 ms
   });
 });
