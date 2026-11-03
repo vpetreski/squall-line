@@ -11,16 +11,18 @@ Its hourly fields come in two kinds, and they are read differently at an arrival
 Rain is `rain + showers` (convective showers are a separate field). Snowfall is fresh snow depth, so with
 `precipitation_unit=inch` it is inches of snow per hour, the unit of the rule table.
 
-The free API charges every location against a quota per IP address (600 a minute, 5,000 an hour, 10,000 a day).
-So a plan asks for a bounded set of locations (`plan_locations`), each location's series is cached for half an
-hour (another load, interval or a later departure inside the same window costs nothing), and the quota headers of
-every answer are kept. A request that the remaining quota cannot cover is not sent: Open-Meteo admits it and then
-holds it until the quota refills. Instead, and whenever Open-Meteo refuses or does not answer in time, the plan is
-answered with the exact query (`WeatherRelay`): the browser sends it to Open-Meteo from its own address and
-returns the answer with the plan. The query asks for every location of the plan that the supplied answer does
-not cover, cached in this process or not, because the browser's next attempt may reach another server process
-with its own cache and quota: one round from the browser is enough unless that process finds other routes. An
-answer supplied that way serves that one request and never enters the shared cache.
+The free API charges every location against a quota per IP address (600 a minute, 5,000 an hour, 10,000 a day). So a
+plan asks for a bounded set of locations (`plan_locations`), each location's series is cached for half an hour and
+serves any later plan whose hours it covers (another load on the same routes costs nothing; another interval or
+departure mostly asks for new series), and the quota headers of every answer are kept. A request that the remaining
+quota cannot cover is not sent: Open-Meteo admits it and then holds it until the quota refills. Instead, and
+whenever Open-Meteo refuses or does not answer in time, the plan is answered with the exact query (`WeatherRelay`):
+the browser sends it to Open-Meteo from its own address and returns the answer with the plan. The query asks for
+every location of the plan that the supplied answer does not cover, cached in this process or not, because the
+browser's next attempt may reach another server process with its own cache and quota. The query asks for three spare
+hours after the last one this plan needs, so one round from the browser is enough unless that process finds other
+routes or arrivals more than three hours later. An answer supplied that way serves that one request and never enters
+the shared cache.
 """
 
 from __future__ import annotations
@@ -158,6 +160,13 @@ class Quota:
 QUOTA = Quota()
 
 
+# Hours a relayed query asks for beyond the plan's own window, in case the browser's next attempt reaches a
+# process whose routes arrive a little later.
+RELAY_SPARE = timedelta(hours=3)
+# No hourly field comes near this; a larger number is not a forecast.
+MAX_VALUE = 1e6
+
+
 class WeatherRelay(UpstreamError):
     """This server cannot fetch the forecast now; `query` is the request to send to Open-Meteo instead."""
 
@@ -166,7 +175,7 @@ class WeatherRelay(UpstreamError):
         self.code = code
         self.query = {
             "url": settings.OPEN_METEO_PUBLIC_URL,
-            "form": _form(locations, first, last),
+            "form": _form(locations, first, last + RELAY_SPARE),
             "locations": [[loc.lat, loc.lon] for loc in locations],
         }
 
@@ -272,13 +281,13 @@ def parse(locations: Sequence[Location], body: Any, t0: int | None = None) -> di
 
 
 def _value(v: Any) -> float:
-    """One hourly value: null is a gap in the forecast, anything else must be a finite number (JSON parsers turn
-    1e999 into infinity)."""
+    """One hourly value: null is a gap in the forecast, anything else must be a finite number of a size a forecast
+    can have (JSON parsers turn 1e999 into infinity, and 1e308 would overflow the rounding)."""
     if v is None:
         return math.nan
     number = float(v)
-    if not math.isfinite(number):
-        raise ValueError(f"{v!r} is not a finite number")
+    if not math.isfinite(number) or abs(number) > MAX_VALUE:
+        raise ValueError(f"{v!r} is not a forecast value")
     return number
 
 

@@ -106,6 +106,8 @@ def test_parse_reads_one_object_or_a_list():
     assert values[HOURLY.index("wind_speed_10m")].tolist() == [5, 6]
     two = parse([Location(40, -100), Location(41, -100)], [_answer(times), _answer(times)])
     assert len(two) == 2
+    with pytest.raises(ValueError, match="malformed"):  # finite, but no forecast has it (and it overflows rounding)
+        parse([Location(40, -100)], _answer(times, wind_speed_10m=[5, 1e308]))
 
 
 @pytest.mark.parametrize(
@@ -193,6 +195,12 @@ def test_a_download_asks_for_the_window_only_and_never_hands_the_key_to_a_browse
         weather.fetch([Location(41.0, -100.0)], start, start)
     assert "apikey" not in relayed.value.query["form"]
     assert relayed.value.query["locations"] == [[41.0, -100.0]]
+    relayed_form = relayed.value.query["form"]
+    spare = last + weather.RELAY_SPARE  # the browser's answer also covers a little later arrivals elsewhere
+    assert (relayed_form["start_hour"], relayed_form["end_hour"]) == (
+        f"{first:%Y-%m-%dT%H:%M}",
+        f"{spare:%Y-%m-%dT%H:%M}",
+    )
 
 
 def test_a_plan_the_quota_cannot_cover_is_relayed_without_asking(monkeypatch):
