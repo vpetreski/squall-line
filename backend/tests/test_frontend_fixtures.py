@@ -17,11 +17,11 @@ from planner.schemas import PlanIn, PlanOut
 
 from .replay import load
 
-FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "src" / "test" / "fixtures"
+FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "src" / "fixtures"
 CASES = ["sacramento-reno", "chicago-atlanta"]
 
 
-@pytest.mark.skipif(not FRONTEND.parent.parent.is_dir(), reason="no frontend next to this backend")
+@pytest.mark.skipif(not FRONTEND.parent.is_dir(), reason="no frontend next to this backend")
 @pytest.mark.parametrize("name", CASES)
 def test_frontend_fixture_is_the_pipeline_output(name, replay):
     case = load(name)
@@ -35,7 +35,7 @@ def test_frontend_fixture_is_the_pipeline_output(name, replay):
     assert json.loads(target.read_text()) == sent
 
 
-@pytest.mark.skipif(not FRONTEND.parent.parent.is_dir(), reason="no frontend next to this backend")
+@pytest.mark.skipif(not FRONTEND.parent.is_dir(), reason="no frontend next to this backend")
 def test_frontend_rules_fixture_is_the_published_table():
     sent = json.loads(json.dumps(risk.rules_table()))
     target = FRONTEND / "rules.json"

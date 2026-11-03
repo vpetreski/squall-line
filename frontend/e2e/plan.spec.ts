@@ -166,3 +166,27 @@ test.describe("entering a trip", () => {
     expect(body).toMatchObject({ load_lb: 30000, interval_mi: 10, hours_of_service: false });
   });
 });
+
+test.describe("the recorded storm", () => {
+  test("replays a recorded plan, says so, and never calls the planner", async ({ page }) => {
+    const sent = await fakeApi(page);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Recorded storm · 3 Nov" }).click();
+    await expect(page.getByTestId("recorded")).toContainText("Recorded plan");
+    await expect(page.getByTestId("recommendation")).toContainText(`Route ${recommended}`);
+    await expect(page.getByTestId("timebar")).toContainText("Recorded");
+    await expect(page).toHaveURL(/\?demo=storm$/);
+    expect(planRequests(sent)).toHaveLength(0);
+  });
+
+  test("opens from its link, and Plan redoes the trip live from now", async ({ page }) => {
+    const sent = await fakeApi(page);
+    await page.goto("/?demo=storm");
+    await expect(page.getByTestId("recorded")).toBeVisible();
+    await page.getByTestId("plan").click();
+    await expect(page.getByTestId("recorded")).toHaveCount(0);
+    const body = planRequests(sent)[0]?.postDataJSON();
+    expect(body.origin.label).toBe(PLAN.request.origin.label);
+    expect(Date.parse(`${body.departure}Z`)).toBeGreaterThan(Date.now() - 36 * 3_600_000); // not the recorded day's
+  });
+});

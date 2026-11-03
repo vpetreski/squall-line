@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import sacramentoReno from "../test/fixtures/sacramento-reno.json";
+import sacramentoReno from "../fixtures/sacramento-reno.json";
 import { planTrip, RequestFailed, type Stage } from "./client";
 import type { PlanInput } from "./schema";
 

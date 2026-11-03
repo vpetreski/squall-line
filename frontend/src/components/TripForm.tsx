@@ -1,3 +1,4 @@
+import { openRecordedStorm } from "../demo";
 import { browserZone, zoneName } from "../lib/time";
 import { useStore } from "../state/store";
 import { type Place, PlaceInput } from "./PlaceInput";
@@ -208,6 +209,15 @@ export function TripForm() {
               {s.name}
             </button>
           ))}
+          <button
+            type="button"
+            className="btn-ghost border-dashed"
+            onClick={() => void openRecordedStorm()}
+            disabled={busy}
+            title="A plan recorded on 3 November 2026, on a stormy day, for when today's weather is calm"
+          >
+            Recorded storm · 3 Nov
+          </button>
         </div>
       </div>
     </form>

@@ -4,7 +4,7 @@ Weather-aware truck routing. Give it an origin, a destination, a departure time 
 three truck routes, the forecast at every checkpoint **at the moment the truck gets there**, the miles each route
 spends at each risk level, a recommendation that says why, and a 48-hour weather heatmap over the whole corridor.
 
-**Live:** <https://squall-line.vercel.app>
+**Live:** <https://squall-line.vercel.app> · **Recorded storm:** <https://squall-line.vercel.app/?demo=storm> (a real plan kept for calm days, [below](#a-recorded-storm))
 
 ![Three routes from Chicago to Atlanta, the risk heatmap along the corridor and the 48-hour clock](docs/screenshot.png)
 
@@ -12,7 +12,7 @@ spends at each risk level, a recommendation that says why, and a 48-hour weather
   Tailwind 4, TanStack Query, Zustand and Zod in the browser.
 - Truck routing from TomTom (weight, governed speed and truck restrictions), with keyless Valhalla and OSRM
   fallbacks; forecasts from Open-Meteo (NOAA HRRR for the first 48 hours over the US).
-- 229 backend tests (97% coverage, mypy strict), 55 unit and component tests and 22 Playwright end-to-end runs
+- 229 backend tests (97% coverage, mypy strict), 55 unit and component tests and 26 Playwright end-to-end runs
   (desktop and phone) in the browser.
 
 ## Running it
@@ -148,6 +148,15 @@ every cell centre on every hour it is exactly the level the server computed (a u
 frame of a real stormy plan). The image's edge follows the corridor around the routes, not the grid's staircase.
 Painting a frame takes about 3 ms (measured for the Chicago to Atlanta corridor on a laptop), well inside a
 60 Hz frame, so dragging or playing the clock stays smooth; the trucks move along their routes with it.
+
+### A recorded storm
+
+The live map shows the weather that is actually coming, so on a calm day the risk layer is nearly empty. The app
+also keeps one real plan, recorded on 3 November 2026: Chicago to Atlanta with 42,000 lb, leaving at 19:00
+Central, while the forecast had heavy rain crossing the corridor. Over its 48 hours the heatmap reaches every level
+from Low to No Travel, and the three routes meet Moderate and High rain at different times. The
+**Recorded storm · 3 Nov** button, or `/?demo=storm`, opens it from the bundle without calling the planner; a
+banner and the clock mark it as a recording, and **Plan** runs the same trip live.
 
 ### Forecast quota
 

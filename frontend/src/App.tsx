@@ -7,13 +7,18 @@ import { RulesPanel } from "./components/RulesPanel";
 import { Status } from "./components/Status";
 import { TimeBar } from "./components/TimeBar";
 import { TripForm } from "./components/TripForm";
-import { browserZone, wallTime } from "./lib/time";
+import { openRecordedStorm } from "./demo";
+import { browserZone, dayTime, wallTime } from "./lib/time";
 import { readTrip, writeTrip } from "./lib/url";
 import { MapView } from "./map/MapView";
 import { useStore } from "./state/store";
 
 const REPO = "https://github.com/vpetreski/squall-line";
 const PROVIDER: Record<string, string> = { tomtom: "TomTom", valhalla: "Valhalla", osrm: "OSRM" };
+const DEFAULT_ATTRIBUTION = [
+  "Weather data by Open-Meteo.com (CC BY 4.0)",
+  "Map data © OpenStreetMap contributors, OpenFreeMap",
+];
 
 function Header() {
   return (
@@ -58,23 +63,48 @@ function Intro() {
   );
 }
 
+/** Says so when the plan on screen is the recording, not today's forecast. */
+function Recorded() {
+  const recordedAt = useStore((s) => s.recordedAt);
+  if (!recordedAt) return null;
+  return (
+    <p
+      className="border border-moderate border-dashed px-3 py-2.5 text-[12.5px] text-moderate leading-relaxed"
+      data-testid="recorded"
+    >
+      Recorded plan: the forecast as it stood on {dayTime(recordedAt, "UTC")} UTC, not live weather. Press Plan for
+      today's.
+    </p>
+  );
+}
+
 function Footer({ plan }: { plan: Plan | null }) {
   const t = plan?.meta.timings_ms;
   return (
     <footer className="space-y-2 border-line border-t pt-4 text-[11px] text-faint leading-relaxed">
       {plan && t ? (
         <p className="num">
-          {PROVIDER[plan.meta.routing_provider] ?? plan.meta.routing_provider} routing {Math.round(t.routing ?? 0)} ms ·
-          weather {Math.round(t.weather ?? 0)} ms · {plan.meta.weather_locations} forecast points
+          {PROVIDER[plan.meta.routing_provider] ?? plan.meta.routing_provider} routing
+          {t.routing !== undefined ? ` ${Math.round(t.routing)} ms` : ""}
+          {t.weather !== undefined ? ` · weather ${Math.round(t.weather)} ms` : ""} · {plan.meta.weather_locations}{" "}
+          forecast points
           {plan.meta.weather_supplied > 0 ? " (fetched by this browser)" : ""}
           {plan.meta.cached_routes ? " · routes cached" : ""}
         </p>
       ) : null}
       <p>
-        {(plan?.meta.attribution ?? ["Routing © TomTom", "Weather data by Open-Meteo.com (CC BY 4.0)"]).join(" · ")}.{" "}
-        <a className="underline hover:text-ink" href="https://open-meteo.com/" target="_blank" rel="noreferrer">
-          Open-Meteo
-        </a>
+        {(plan?.meta.attribution ?? DEFAULT_ATTRIBUTION).map((line, i) => (
+          <span key={line}>
+            {i > 0 ? " · " : ""}
+            {line.includes("Open-Meteo") ? (
+              <a className="underline hover:text-ink" href="https://open-meteo.com/" target="_blank" rel="noreferrer">
+                {line}
+              </a>
+            ) : (
+              line
+            )}
+          </span>
+        ))}
       </p>
       <p className="flex gap-3">
         <a className="underline hover:text-ink" href={REPO} target="_blank" rel="noreferrer">
@@ -96,6 +126,10 @@ export function App() {
 
   useEffect(() => {
     ping();
+    if (new URLSearchParams(window.location.search).get("demo") === "storm") {
+      void openRecordedStorm();
+      return;
+    }
     const { departure, ...trip } = readTrip(window.location.search);
     if (!trip.origin || !trip.destination) return;
     const state = useStore.getState();
@@ -109,7 +143,8 @@ export function App() {
 
   useEffect(() => {
     if (status !== "done" || !plan) return;
-    window.history.replaceState(null, "", writeTrip(useStore.getState().input, plan.request.departure));
+    const { input, recordedAt } = useStore.getState();
+    window.history.replaceState(null, "", recordedAt ? "?demo=storm" : writeTrip(input, plan.request.departure));
     // Bring the answer into view: on a wide screen the side panel scrolls to the recommendation, on a phone the
     // page scrolls to the map, with the cards right under it.
     const wide = window.matchMedia("(min-width: 1024px)").matches;
@@ -132,6 +167,7 @@ export function App() {
         <div className="order-4 space-y-5 px-5 pt-5 pb-6">
           {plan ? (
             <div ref={results} className="scroll-mt-5 space-y-5">
+              <Recorded />
               <Recommendation plan={plan} />
               <RouteCards plan={plan} />
               <CheckpointList plan={plan} />

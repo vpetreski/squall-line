@@ -1,7 +1,7 @@
 /** A stand-in for the Django API and the tile server, answering from the same fixtures as the unit tests. */
 import type { Page, Request, Route } from "@playwright/test";
-import chicagoAtlanta from "../src/test/fixtures/chicago-atlanta.json" with { type: "json" };
-import rules from "../src/test/fixtures/rules.json" with { type: "json" };
+import chicagoAtlanta from "../src/fixtures/chicago-atlanta.json" with { type: "json" };
+import rules from "../src/fixtures/rules.json" with { type: "json" };
 
 export const PLAN = chicagoAtlanta;
 export type Answer = { status: number; body: unknown };

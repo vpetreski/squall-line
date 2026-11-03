@@ -16,6 +16,8 @@ type State = {
   zones: Zones;
   /** The departure was typed or came from a shared link, so a new origin keeps it instead of resetting it. */
   departureSet: boolean;
+  /** When the plan on screen was made, if it is a recording rather than a live plan. */
+  recordedAt: number | null;
   plan: Plan | null;
   status: Status;
   startedAt: number;
@@ -30,6 +32,7 @@ type State = {
   setZones: (patch: Partial<Zones>) => void;
   setDeparture: (local: string, explicit: boolean) => void;
   run: () => Promise<void>;
+  showRecorded: (plan: Plan, recordedAt: number) => void;
   select: (id: string | null) => void;
   hover: (id: string | null) => void;
   setHours: (hours: number) => void;
@@ -51,6 +54,7 @@ export const useStore = create<State>((set, get) => ({
   },
   zones: { origin: null, destination: null },
   departureSet: false,
+  recordedAt: null,
   plan: null,
   status: "idle",
   startedAt: 0,
@@ -92,6 +96,7 @@ export const useStore = create<State>((set, get) => ({
       const last = plan.routes[0]?.checkpoints.at(-1);
       set((s) => ({
         plan,
+        recordedAt: null,
         status: "done",
         input: { ...s.input, departure: plan.request.departure.slice(0, 16) },
         zones: { origin: plan.request.time_zone, destination: last?.time_zone ?? s.zones.destination },
@@ -110,6 +115,22 @@ export const useStore = create<State>((set, get) => ({
     } finally {
       if (inflight === controller) inflight = null;
     }
+  },
+
+  showRecorded: (plan, recordedAt) => {
+    inflight?.abort();
+    inflight = null;
+    set({
+      plan,
+      recordedAt,
+      status: "done",
+      error: null,
+      playing: false,
+      selectedId: plan.recommendation.route_id,
+      hoveredId: null,
+      hours: 0,
+      focus: null,
+    });
   },
 
   select: (id) => set({ selectedId: id, focus: null }),

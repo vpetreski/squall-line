@@ -93,7 +93,8 @@ export function TimeBar({ plan }: { plan: Plan }) {
 
   const zone = plan.request.time_zone;
   const at = Date.parse(plan.corridor.start) + hours * 3_600_000;
-  const lead = Math.round((at - Date.now()) / 3_600_000);
+  const recordedAt = useStore((s) => s.recordedAt);
+  const lead = Math.round((at - (recordedAt ?? Date.now())) / 3_600_000);
 
   return (
     <div
@@ -108,6 +109,9 @@ export function TimeBar({ plan }: { plan: Plan }) {
             {dayTime(at, zone)} <span className="text-muted">{zoneName(at, zone)}</span>
           </span>
           <span className="label normal-case tracking-normal">forecast {lead >= 0 ? `+${lead}` : lead} h</span>
+          {recordedAt ? (
+            <span className="label border border-moderate border-dashed px-1.5 text-moderate">Recorded</span>
+          ) : null}
         </div>
         <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
           <Legend layer={layer} rules={rules.data} />
