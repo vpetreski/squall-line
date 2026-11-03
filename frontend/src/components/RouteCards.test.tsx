@@ -20,7 +20,15 @@ describe("reason", () => {
     [{ route_id: "B", key: "severe_miles", best: 2.5, other: 7.5 }, "7.5 mi of Severe, against 2.5."],
     [{ route_id: "B", key: "high_miles", best: 0, other: 25 }, "25 mi of High, against 0."],
     [{ route_id: "B", key: "average_risk", best: 0.03, other: 0.11 }, "Average risk 0.11, against 0.03."],
+    [{ route_id: "B", key: "severe_miles", best: 12, other: 12.4 }, "12.4 mi of Severe, against 12.0."],
+    [{ route_id: "B", key: "high_miles", best: 0, other: 0.1 }, "0.1 mi of High, against 0.0."],
+    [{ route_id: "B", key: "no_travel_miles", best: 1200, other: 1234.5 }, "1,234.5 mi of No Travel, against 1,200.0."],
+    [{ route_id: "B", key: "no_travel_miles", best: 1200, other: 1250 }, "1,250 mi of No Travel, against 1,200."],
     [{ route_id: "B", key: "trip_time_s", best: 3600, other: 7200 }, "Same risk, 1 h slower."],
+    [{ route_id: "B", key: "trip_time_s", best: 3600, other: 3660 }, "Same risk, 1 m slower."],
+    [{ route_id: "B", key: "trip_time_s", best: 80549, other: 80578 }, "Same risk, 1 m slower."], // 1342 against 1343 min
+    [{ route_id: "B", key: "trip_time_s", best: 3600, other: 7260 }, "Same risk, 1 h 01 m slower."],
+    [{ route_id: "B", key: "trip_time_s", best: 80536, other: 80545 }, "Same risk, under a minute slower."],
     [{ route_id: "B", key: null, best: null, other: null }, "Ties the recommended route on every measure."],
   ] as const)("explains %o", (comparison, text) => {
     expect(reason(comparison)).toBe(text);

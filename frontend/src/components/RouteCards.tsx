@@ -7,21 +7,36 @@ import { useStore } from "../state/store";
 const mi = (value: number) =>
   value >= 10 ? Math.round(value).toLocaleString("en-US") : value.toFixed(1).replace(/\.0$/, "");
 
+/**
+ * Two mileages at the 0.1 mi the ranking compares them at, so they read apart whenever the ranking found them apart:
+ * whole numbers when both are whole, otherwise one decimal on both ("12.4 mi of Severe, against 12.0").
+ */
+function milesApart(other: number, best: number, level: string): string {
+  const tenths = (v: number) => Math.round(v * 10) / 10;
+  const digits = Number.isInteger(tenths(other)) && Number.isInteger(tenths(best)) ? 0 : 1;
+  const f = (v: number) =>
+    tenths(v).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return `${f(other)} mi of ${level}, against ${f(best)}.`;
+}
+
 /** Why the recommended route beats this one: the first ranking key on which they differ. */
 export function reason(c: Comparison | undefined): string {
   if (!c || c.key === null || c.best === null || c.other === null)
     return "Ties the recommended route on every measure.";
   switch (c.key) {
     case "no_travel_miles":
-      return `${mi(c.other)} mi of No Travel, against ${mi(c.best)}.`;
+      return milesApart(c.other, c.best, "No Travel");
     case "severe_miles":
-      return `${mi(c.other)} mi of Severe, against ${mi(c.best)}.`;
+      return milesApart(c.other, c.best, "Severe");
     case "high_miles":
-      return `${mi(c.other)} mi of High, against ${mi(c.best)}.`;
+      return milesApart(c.other, c.best, "High");
     case "average_risk":
       return `Average risk ${c.other.toFixed(2)}, against ${c.best.toFixed(2)}.`;
-    case "trip_time_s":
-      return `Same risk, ${duration(c.other - c.best)} slower.`;
+    case "trip_time_s": {
+      // Trip times are compared in whole minutes, the way the cards show them.
+      const minutes = Math.round(c.other / 60) - Math.round(c.best / 60);
+      return minutes >= 1 ? `Same risk, ${duration(minutes * 60)} slower.` : "Same risk, under a minute slower.";
+    }
   }
 }
 
