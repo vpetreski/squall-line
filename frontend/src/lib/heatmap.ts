@@ -14,7 +14,12 @@ export type LayerName = "risk" | "wind" | "rain" | "snow";
 export type RGBA = [number, number, number, number];
 type Stop = [value: number, rgba: RGBA];
 
-export const SUPERSAMPLE = 16;
+/**
+ * Pixels per cell, across and down. Odd, so that one pixel's centre sits exactly on each cell's centre ((x + 0.5) /
+ * 15 - 0.5 = c for x = 15c + 7) and shows that cell's own forecast with weight 1: with an even count every pixel
+ * mixes in a neighbour, and an isolated cell just over a threshold never shows its level anywhere.
+ */
+export const SUPERSAMPLE = 15;
 
 /** Colour ramps keyed to the rule thresholds, so a colour change on the map is a level change in the rules. */
 export const RAMPS: Record<Exclude<LayerName, "risk">, Stop[]> = {

@@ -20,6 +20,29 @@ describe("classifier", () => {
     }
   });
 
+  it("paints the server's level on every corridor cell's centre pixel on every hour of a real plan", () => {
+    for (const [name, plan] of Object.entries(PLANS)) {
+      const c = plan.corridor;
+      const grid = raster(
+        c,
+        plan.routes.map((r) => decodePolyline(r.geometry)),
+      );
+      const target = new Uint8ClampedArray(grid.width * grid.height * 4);
+      const classify = classifier(RULES, plan.request.load_lb);
+      const wrong: string[] = [];
+      for (let f = 0; f < c.frames; f++) {
+        paint(c, grid, "risk", f, target, classify);
+        c.cells.forEach((cell, slot) => {
+          const x = Math.floor(((cell % c.cols) + 0.5) * grid.scale);
+          const y = Math.floor((Math.floor(cell / c.cols) + 0.5) * grid.scale);
+          const got = levelOf(at(target, grid.width, x, y));
+          if (got !== c.risk[f]?.[slot]) wrong.push(`${name} hour ${f} cell ${cell}: ${got} != ${c.risk[f]?.[slot]}`);
+        });
+      }
+      expect(wrong).toEqual([]);
+    }
+  });
+
   it("covers every level in the stormy fixture, so the check above means something", () => {
     const levels = new Set(PLANS["chicago-atlanta"]?.corridor.risk.flat());
     expect([...levels].sort()).toEqual([0, 1, 2, 3, 4]);
@@ -46,6 +69,12 @@ describe("classifier", () => {
     expect(classifier(RULES, 80_000)(34.9, 0, 0)).toBe(1);
   });
 });
+
+/** The risk level a painted pixel shows, read from its colour (its alpha also carries the corridor's edge). */
+function levelOf([r, g, b]: (number | undefined)[]): number | "unpainted" {
+  const level = RISK_RGBA.findIndex(([lr, lg, lb]) => lr === r && lg === g && lb === b);
+  return level >= 0 ? level : "unpainted";
+}
 
 /** A 3 x 3 lattice, every cell inside, two hourly frames with the same value everywhere. */
 function uniform(wind: [number, number], risk: [number, number] = [0, 0]): Corridor {
@@ -83,6 +112,16 @@ describe("raster", () => {
       expect(grid.coverage[p]).toBeGreaterThan(0);
       expect(grid.coverage[p]).toBeLessThanOrEqual(1);
     }
+  });
+
+  it("puts one pixel exactly on every cell's centre, taking that cell's forecast alone", () => {
+    const corridor = uniform([10, 10]);
+    const grid = raster(corridor);
+    const own = new Set<number>();
+    for (let p = 0; p < grid.pixels.length; p++) {
+      if (grid.weights[p * 4] === 1) own.add(grid.slots[p * 4] as number);
+    }
+    expect([...own].sort()).toEqual(corridor.cells.map((_, slot) => slot));
   });
 
   it("follows the routes' band, not the cells' staircase, when routes are given", () => {
@@ -131,6 +170,17 @@ describe("paint", () => {
     expect(at(target, grid.width, 12, 12)[3]).toBe(Math.round((RISK_RGBA[1]?.[3] ?? 0) * 255));
     paint(corridor, grid, "risk", 0.6, target, null);
     expect(at(target, grid.width, 12, 12)[3]).toBe(Math.round((RISK_RGBA[2]?.[3] ?? 0) * 255));
+  });
+
+  it("shows an isolated cell's level, however close to the threshold", () => {
+    const corridor = uniform([0, 0]);
+    const wet = corridor.cells.map((_, slot) => (slot === 4 ? 0.105 : 0)); // the middle cell, just over Moderate
+    corridor.rain_in_hr = [wet, wet];
+    const grid = raster(corridor);
+    const target = new Uint8ClampedArray(grid.width * grid.height * 4);
+    paint(corridor, grid, "risk", 0, target, classifier(RULES, 0));
+    const middle = Math.floor(1.5 * grid.scale);
+    expect(levelOf(at(target, grid.width, middle, middle))).toBe(1);
   });
 
   it("leaves Low clear", () => {
