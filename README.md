@@ -84,7 +84,8 @@ time comes from the engine's own timing along the route (TomTom's per-instructio
 maneuvers), spread over the road between them by distance. With hours of service on (the default), the federal
 rules for a property-carrying driver (49 CFR 395.3) add a 30-minute break after 8 hours of driving and a 10-hour
 rest after 11. The driver is assumed to start rested, with hours left in the week. The stops are drawn on the map
-and listed between the checkpoints.
+and listed between the checkpoints. Every route's checkpoints are drawn on the map too: the selected route's in
+full, the others dimmed.
 
 ### The forecast at the truck's ETA
 
@@ -96,8 +97,13 @@ scored, because the rules are written for wind speed.
 
 A plan asks Open-Meteo for at most 450 locations: every checkpoint of three routes plus the corridor heatmap. Long
 trips at 10-mile spacing would ask for more, so points are snapped to a grid that coarsens until they fit
-(`meta.weather_grid_deg` and `meta.weather_snapped` report what happened). Each location's series is cached for
-half an hour, so a second plan over the same area (another load, interval or departure) costs nothing.
+(`meta.weather_grid_deg` and `meta.weather_snapped` report what happened). Each location's series is cached for half
+an hour by the server process that fetched it (shared by every process through Redis when `REDIS_URL` is set). A
+later plan reuses a series for the same location when the series covers the hours that plan needs. So another load
+costs no forecast request when its routes are the same; another interval moves the checkpoints and resizes the
+corridor grid, so most of its locations are new; another departure is covered only if its window, from an hour
+before the departure to two hours after the later of the last arrival and the 48-hour mark, lies inside the cached
+one, which usually means a departure within the same hour.
 
 ### Risk
 
@@ -112,14 +118,14 @@ half an hour, so a second plan over the same area (another load, interval or dep
 Heavy loads raise the wind level: 45-54 mph with more than 30,000 lb on board is No Travel, and 35-44 mph with more
 than 40,000 lb is Severe. The worst of the three conditions sets the checkpoint's level.
 
-The bounds are kept exactly as the table writes them. Every band includes its lower bound, so 25 mph is Moderate
-and 0.25 in/hr is High. No Travel is "≥ 55" for wind but "> 1.00" and "> 3.0" for rain and snow, so 1.00 in/hr of
-rain is still Severe and 55 mph of wind is already No Travel. Values are classified at the precision they are shown
-in (0.1 mph, 0.001 in/hr), so a rain total of 0.0999999 is the 0.100 the page displays. The server and the browser
-round the same way, half up on the float64 product (`Math.round(value * 10**decimals) / 10**decimals`), so 24.95 mph
-is 25.0 and Moderate in the checkpoints, in the heatmap and in the numbers shown. A missing value is an error, never
-Low. The thresholds and load rules are served at `/api/rules`, and the page draws its legend and the rules panel
-from that answer.
+The bounds are kept exactly as the table writes them. Every band includes its lower bound, so 25 mph is Moderate and
+0.25 in/hr is High. No Travel is "≥ 55" for wind but "> 1.00" and "> 3.0" for rain and snow, so 1.00 in/hr of rain
+is still Severe and 55 mph of wind is already No Travel. Values are classified at the precision they are shown in:
+the checkpoint table and the checkpoint card give wind to 0.1 mph and rain and snow to 0.001 in/hr, so a rain total
+of 0.0999999 is the 0.100 the page displays. The server and the browser round the same way, half up on the float64
+product (`Math.round(value * 10**decimals) / 10**decimals`), so 24.95 mph is 25.0 and Moderate in the checkpoints,
+in the heatmap and in the numbers shown. A missing value is an error, never Low. The thresholds and load rules are
+served at `/api/rules`, and the page draws its legend and the rules panel from that answer.
 
 ### Ranking
 
@@ -137,24 +143,27 @@ preferred to one without it, however the other keys compare. Miles are compared 
 to a hundredth and the trip time to the minute, the precision they are shown at, so the reason given for every
 ranking (the first key on which the routes differ, shown on each card) can be read off the numbers on screen. Routes
 that tie on every key keep the engine's order, and the card says the route ties the recommended one. On a calm day
-every route is Low all the way and the fastest one wins. When every route meets No Travel weather, the plan still ranks them and
-says that no route is safe.
+every route is Low all the way and the fastest one wins. When every route meets No Travel weather, the plan still
+ranks them and says that no route is safe.
 
 ### The corridor heatmap
 
 The corridor is everything within a distance W of any of the three routes, where W is 4% of the longest route,
-kept between 30 and 90 km. A regular grid in Web Mercator, the map's own projection, covers it with 120 to 200
-cells inside the corridor, each one a forecast location, and the plan carries 49 hourly frames from the departure
-(hour 0 to hour 48) of wind, rain, snow and risk for every cell.
+kept between 30 and 90 km. A regular grid in Web Mercator, the map's own projection, covers it. Its budget of cells
+is what the 450 locations leave after the checkpoints, kept between 120 and 200, and the cell size is chosen so that
+between 85% of the budget and the whole budget fall inside the corridor: as few as about 102 cells and at most 200,
+each one a forecast location. The plan carries 49 hourly frames from the departure (hour 0 to hour 48) of wind,
+rain, snow and risk for every cell.
 
 In the browser the whole lattice is one image laid over the map by its four corners, so no cell is ever misplaced.
-Each cell is drawn as 16 x 16 pixels: the weather is interpolated in space between cell centres and in time between
-the hourly frames, and only then coloured. The risk layer classifies the interpolated weather with the same
-published rules, so hazard areas grow, shrink and drift as the clock moves instead of jumping hour by hour, and at
-every cell centre on every hour it is exactly the level the server computed (a unit test checks every cell of every
-frame of a real stormy plan). The image's edge follows the corridor around the routes, not the grid's staircase.
-Painting a frame takes about 3 ms (measured for the Chicago to Atlanta corridor on a laptop), well inside a
-60 Hz frame, so dragging or playing the clock stays smooth; the trucks move along their routes with it.
+Each cell is drawn as 15 x 15 pixels, an odd number, so a pixel centre falls exactly on every cell centre: the
+weather is interpolated in space between cell centres and in time between the hourly frames, and only then coloured.
+The risk layer classifies the interpolated weather with the same published rules, so hazard areas grow, shrink and
+drift as the clock moves instead of jumping hour by hour, and at every cell centre on every hour it is exactly the
+level the server computed (a unit test checks every cell of every frame of a real stormy plan). The image's edge
+follows the corridor around the routes, not the grid's staircase. Painting a frame takes about 3 ms (measured for
+the Chicago to Atlanta corridor on a laptop), well inside a 60 Hz frame, so dragging or playing the clock stays
+smooth; the trucks move along their routes with it.
 
 ### A recorded storm
 
@@ -167,14 +176,15 @@ banner and the clock mark it as a recording, and **Plan** runs the same trip liv
 
 ### Forecast quota
 
-Open-Meteo's free API counts every location against a quota per IP address. A server that many people use runs
-out, and Open-Meteo then holds a request it cannot serve instead of refusing it. So the server tracks the quota
-from Open-Meteo's own rate-limit headers and never sends a request the quota cannot cover. When the quota is spent,
-or Open-Meteo refuses or does not answer in time, `/api/plan` answers 503 with the exact Open-Meteo query; the
-browser sends it from its own address and asks again with the answer attached. The query covers every location of
-the plan, including those this server has cached, so the second attempt completes on any server instance, whatever
-its own cache and quota. The server validates that answer and uses it for that one request only: it never enters
-the shared cache.
+Open-Meteo's free API counts every location against a quota per IP address. A server that many people use runs out,
+and Open-Meteo then holds a request it cannot serve instead of refusing it. So each server process tracks the quota
+from the rate-limit headers of the answers it gets, and never sends a request the quota it has seen cannot cover.
+Processes do not share that count: on a deployment with several instances, each learns its own. When the quota is
+spent, or Open-Meteo refuses or does not answer in time, `/api/plan` answers 503 with the exact Open-Meteo query;
+the browser sends it from its own address and asks again with the answer attached. The query covers every location
+of the plan, including those this server has cached, so the second attempt completes on any server instance,
+whatever its own cache and quota. The server validates that answer and uses it for that one request only: it never
+enters the shared cache.
 
 ## API
 
@@ -264,11 +274,12 @@ All settings are environment variables, read from `.env` at the repository root 
 ## Deployment
 
 The hosted app runs on Vercel (`vercel.json`): the Vite build is served as static files and `/api/*` goes to Django
-as a Python function. Nothing has to be built by hand:
+as a Python function. Nothing has to be built by hand. Add the key first, because a deployment takes the
+environment it is made with:
 
 ```bash
-vercel deploy --prod
 vercel env add TOMTOM_API_KEY production
+vercel deploy --prod
 ```
 
 ## Project layout
