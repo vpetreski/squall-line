@@ -68,7 +68,8 @@ def test_ranking_follows_the_keys(case, replay):
 
     def key(r: dict[str, Any]) -> tuple:
         m = r["miles"]
-        return (m["no_travel"], m["severe"], m["high"], r["average_risk"], round(r["trip_s"]), r["id"])
+        minutes = (round(r["trip_s"]) + 30) // 60  # trip time ranks at the minute it is shown at
+        return (m["no_travel"], m["severe"], m["high"], r["average_risk"], minutes, r["id"])
 
     routes = out["routes"]
     assert routes == sorted(routes, key=key)

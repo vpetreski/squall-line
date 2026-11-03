@@ -1,7 +1,7 @@
 import pytest
 
 from planner.risk import Risk
-from planner.scoring import Score, compare, exposure, hazards, rank
+from planner.scoring import Comparison, Score, compare, exposure, hazards, rank
 
 L, M, H, S, N = Risk.LOW, Risk.MODERATE, Risk.HIGH, Risk.SEVERE, Risk.NO_TRAVEL
 
@@ -56,6 +56,15 @@ def test_rounding_noise_does_not_decide():
     a = Score("A", exposure([S, L], [10.04, 10]), 11 * 3600)
     b = Score("B", exposure([S, L], [10.0, 10]), 10 * 3600)
     assert rank([a, b])[0].route_id == "B"  # 10.04 and 10.0 severe miles tie at 0.1 mi; B is faster
+
+
+def test_trip_time_is_compared_to_the_minute_it_is_shown_at():
+    a = score("A", [L, L], 10)
+    b = Score("B", a.exposure, 10 * 3600 + 20)  # 20 s slower: both show as 10 h 00 m
+    assert [s.route_id for s in rank([b, a])] == ["B", "A"]  # a tie keeps the order the routes came in
+    assert compare(a, b) == Comparison("B", key=None, best=None, other=None)
+    c = Score("C", a.exposure, 10 * 3600 + 30)  # half a minute rounds up, as the page does: 10 h 01 m
+    assert compare(a, c) == Comparison("C", key="trip_time_s", best=36_000, other=36_060)
 
 
 def test_hazards_are_runs_of_high_or_worse():

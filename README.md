@@ -133,10 +133,11 @@ length and the sampled levels become "miles at each level". Routes are ranked by
 5. shortest trip time.
 
 Keys 2 to 5 are the stated order. No Travel miles come first because a route through No Travel weather cannot be
-preferred to one without it, however the other keys compare. Miles are compared to a tenth of a mile and the
-average to a hundredth, the precision they are shown at, so the reason given for every ranking (the first key on
-which the routes differ, shown on each card) can be read off the numbers on screen. On a calm day every route is
-Low all the way and the fastest one wins. When every route meets No Travel weather, the plan still ranks them and
+preferred to one without it, however the other keys compare. Miles are compared to a tenth of a mile, the average
+to a hundredth and the trip time to the minute, the precision they are shown at, so the reason given for every
+ranking (the first key on which the routes differ, shown on each card) can be read off the numbers on screen. Routes
+that tie on every key keep the engine's order, and the card says the route ties the recommended one. On a calm day
+every route is Low all the way and the fastest one wins. When every route meets No Travel weather, the plan still ranks them and
 says that no route is safe.
 
 ### The corridor heatmap
