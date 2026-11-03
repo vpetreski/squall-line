@@ -12,7 +12,7 @@ spends at each risk level, a recommendation that says why, and a 48-hour weather
   Tailwind 4, TanStack Query, Zustand and Zod in the browser.
 - Truck routing from TomTom (weight, governed speed and truck restrictions), with keyless Valhalla and OSRM
   fallbacks; forecasts from Open-Meteo (NOAA HRRR for the first 48 hours over the US).
-- 229 backend tests (97% coverage, mypy strict), 55 unit and component tests and 26 Playwright end-to-end runs
+- 231 backend tests (96% branch coverage, mypy strict), 55 unit and component tests and 26 Playwright end-to-end runs
   (desktop and phone) in the browser.
 
 ## Running it

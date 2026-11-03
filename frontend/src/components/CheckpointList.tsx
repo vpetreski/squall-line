@@ -77,9 +77,9 @@ export function CheckpointList({ plan }: { plan: Plan }) {
         <div className="label grid grid-cols-[3.2rem_4.6rem_1fr_3.4rem_3.4rem_4.2rem] gap-1 border-line border-b bg-panel px-2 py-1.5">
           <span>Mile</span>
           <span>ETA</span>
-          <span>Wind</span>
-          <span>Rain</span>
-          <span>Snow</span>
+          <span className="text-right">Wind</span>
+          <span className="text-right">Rain</span>
+          <span className="text-right">Snow</span>
           <span className="text-right">Risk</span>
         </div>
         <div className="scroll-thin max-h-[420px] overflow-y-auto">
@@ -118,12 +118,16 @@ export function CheckpointList({ plan }: { plan: Plan }) {
               >
                 <span className="text-muted">{Math.round(c.mile)}</span>
                 <span>{weekdayClock(c.eta, zone)}</span>
-                <span>
+                <span className="text-right">
                   {c.weather.wind_mph.toFixed(0)}
                   <span className="text-faint">/{c.weather.gust_mph.toFixed(0)}</span>
                 </span>
-                <span className={c.weather.rain_in_hr > 0 ? "" : "text-faint"}>{c.weather.rain_in_hr.toFixed(2)}</span>
-                <span className={c.weather.snow_in_hr > 0 ? "" : "text-faint"}>{c.weather.snow_in_hr.toFixed(2)}</span>
+                <span className={`text-right ${c.weather.rain_in_hr > 0 ? "" : "text-faint"}`}>
+                  {c.weather.rain_in_hr.toFixed(2)}
+                </span>
+                <span className={`text-right ${c.weather.snow_in_hr > 0 ? "" : "text-faint"}`}>
+                  {c.weather.snow_in_hr.toFixed(2)}
+                </span>
                 <span className="flex items-center justify-end gap-1.5">
                   <span className="text-[10px] tracking-wider">{LEVEL_SHORT[c.risk.level]}</span>
                   <span className="inline-block size-2" style={{ background: LEVEL_COLOR[c.risk.level] }} />
