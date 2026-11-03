@@ -222,6 +222,27 @@ export function MapView() {
           "circle-stroke-width": 2,
         },
       });
+      // Place names make way for the markers: invisible symbols on the endpoints and checkpoints take part in label
+      // placement, so a city name at a marker moves aside (or hides) instead of being drawn through.
+      map.addImage("keep-clear", { width: 2, height: 2, data: new Uint8Array(2 * 2 * 4) });
+      map.addLayer({
+        id: "endpoints-clear",
+        type: "symbol",
+        source: "endpoints",
+        layout: { "icon-image": "keep-clear", "icon-size": 9, "icon-allow-overlap": true },
+        paint: { "icon-opacity": 0 },
+      });
+      map.addLayer({
+        id: "checkpoints-clear",
+        type: "symbol",
+        source: "checkpoints",
+        layout: {
+          "icon-image": "keep-clear",
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 3, 3, 6, 4.5, 10, 6.5],
+          "icon-allow-overlap": true,
+        },
+        paint: { "icon-opacity": 0 },
+      });
       const pointer = () => {
         map.getCanvas().style.cursor = "pointer";
       };
@@ -382,7 +403,7 @@ export function MapView() {
     if (all.length > 0) {
       const narrow = window.matchMedia("(max-width: 1023px)").matches;
       map.fitBounds(bounds(all), {
-        padding: narrow ? { top: 48, bottom: 36, left: 28, right: 28 } : { top: 80, bottom: 150, left: 80, right: 80 },
+        padding: narrow ? { top: 48, bottom: 56, left: 28, right: 28 } : { top: 80, bottom: 185, left: 80, right: 80 },
         duration: 900,
       });
     }

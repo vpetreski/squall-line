@@ -103,12 +103,14 @@ export function TimeBar({ plan }: { plan: Plan }) {
       data-hours={hours.toFixed(2)}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-line border-b px-3 py-2">
-        <div className="flex items-baseline gap-2">
-          <span className="display text-[18px]">+{hours.toFixed(1)} h</span>
-          <span className="num text-[12.5px] text-ink">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="display whitespace-nowrap text-[18px]">+{hours.toFixed(1)} h</span>
+          <span className="num whitespace-nowrap text-[12.5px] text-ink">
             {dayTime(at, zone)} <span className="text-muted">{zoneName(at, zone)}</span>
           </span>
-          <span className="label normal-case tracking-normal">forecast {lead >= 0 ? `+${lead}` : lead} h</span>
+          <span className="label whitespace-nowrap normal-case tracking-normal">
+            forecast {lead >= 0 ? `+${lead}` : lead} h
+          </span>
           {recordedAt ? (
             <span className="label border border-moderate border-dashed px-1.5 text-moderate">Recorded</span>
           ) : null}
