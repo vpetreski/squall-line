@@ -1,7 +1,12 @@
+import { useDecimals } from "../api/hooks";
 import type { Plan, Route } from "../api/schema";
 import { LEVEL_COLOR, LEVEL_LABEL, LEVEL_SHORT } from "../lib/risk";
 import { clock, dayTime, duration, weekdayClock } from "../lib/time";
 import { useStore } from "../state/store";
+
+// Fixed columns sized to their widest text (a four-digit mile, "Wed 14:05", "1.004", "NO TRAVEL" and its square), so
+// wind and gusts at 0.1 mph ("54.9/71") keep the rest of a phone's width and every row lines up with the header.
+const COLUMNS = "grid-cols-[2.2rem_4.5rem_1fr_2.8rem_2.8rem_4.9rem]";
 
 type Row =
   | { kind: "checkpoint"; index: number; mile: number }
@@ -18,6 +23,7 @@ export function CheckpointList({ plan }: { plan: Plan }) {
   const focus = useStore((s) => s.focus);
   const setFocus = useStore((s) => s.setFocus);
   const setHours = useStore((s) => s.setHours);
+  const decimals = useDecimals();
   const route = plan.routes.find((r) => r.id === selectedId);
   if (!route) return null;
   const zone = plan.request.time_zone;
@@ -74,7 +80,7 @@ export function CheckpointList({ plan }: { plan: Plan }) {
       )}
 
       <div className="border border-line">
-        <div className="label grid grid-cols-[3.2rem_4.6rem_1fr_3.4rem_3.4rem_4.2rem] gap-1 border-line border-b bg-panel px-2 py-1.5">
+        <div className={`label grid ${COLUMNS} gap-1 border-line border-b bg-panel px-2 py-1.5`}>
           <span>Mile</span>
           <span>ETA</span>
           <span className="text-right">Wind</span>
@@ -104,6 +110,9 @@ export function CheckpointList({ plan }: { plan: Plan }) {
             const c = route.checkpoints[row.index];
             if (!c) return null;
             const active = focus?.routeId === route.id && focus.index === row.index;
+            // At the precision the level was classified at, so the number on the row always explains its level.
+            const rain = c.weather.rain_in_hr.toFixed(decimals.rain);
+            const snow = c.weather.snow_in_hr.toFixed(decimals.snow);
             return (
               <button
                 key={`cp-${row.index}`}
@@ -113,21 +122,17 @@ export function CheckpointList({ plan }: { plan: Plan }) {
                     setFocus({ routeId: route.id, index: row.index, pinned: false });
                 }}
                 onClick={() => jump(row.index)}
-                className={`num grid w-full grid-cols-[3.2rem_4.6rem_1fr_3.4rem_3.4rem_4.2rem] items-center gap-1 border-line border-b px-2 py-1.5 text-left text-[12px] last:border-b-0 hover:bg-raise ${active ? "bg-raise" : ""}`}
+                className={`num grid w-full ${COLUMNS} items-center gap-1 border-line border-b px-2 py-1.5 text-left text-[12px] last:border-b-0 hover:bg-raise ${active ? "bg-raise" : ""}`}
                 style={{ boxShadow: c.risk.level === "low" ? undefined : `inset 3px 0 0 ${LEVEL_COLOR[c.risk.level]}` }}
               >
                 <span className="text-muted">{Math.round(c.mile)}</span>
                 <span>{weekdayClock(c.eta, zone)}</span>
                 <span className="text-right">
-                  {c.weather.wind_mph.toFixed(0)}
+                  {c.weather.wind_mph.toFixed(decimals.wind)}
                   <span className="text-faint">/{c.weather.gust_mph.toFixed(0)}</span>
                 </span>
-                <span className={`text-right ${c.weather.rain_in_hr > 0 ? "" : "text-faint"}`}>
-                  {c.weather.rain_in_hr.toFixed(2)}
-                </span>
-                <span className={`text-right ${c.weather.snow_in_hr > 0 ? "" : "text-faint"}`}>
-                  {c.weather.snow_in_hr.toFixed(2)}
-                </span>
+                <span className={`text-right ${Number(rain) > 0 ? "" : "text-faint"}`}>{rain}</span>
+                <span className={`text-right ${Number(snow) > 0 ? "" : "text-faint"}`}>{snow}</span>
                 <span className="flex items-center justify-end gap-1.5">
                   <span className="text-[10px] tracking-wider">{LEVEL_SHORT[c.risk.level]}</span>
                   <span className="inline-block size-2" style={{ background: LEVEL_COLOR[c.risk.level] }} />

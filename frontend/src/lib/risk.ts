@@ -35,6 +35,13 @@ export function totalMiles(miles: Miles): number {
 
 export const CAUSE_LABEL: Record<string, string> = { wind: "wind", rain: "rain", snow: "snow" };
 
+/**
+ * How many decimals wind, rain and snow are classified at (`decimals` in /api/rules), so they are shown at it: the
+ * server's own values, for the moment before the rules arrive.
+ */
+export type Decimals = { wind: number; rain: number; snow: number };
+export const DECIMALS: Decimals = { wind: 1, rain: 3, snow: 3 };
+
 export const LOAD_RULE_TEXT: Record<string, string> = {
   wind_45_over_30000_lb: "45–54 mph with more than 30,000 lb aboard: No Travel",
   wind_35_over_40000_lb: "35–44 mph with more than 40,000 lb aboard: Severe",

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "../state/store";
 import { PLANS } from "../test/fixtures";
+import { renderWithRules } from "../test/render";
 import { CheckpointList } from "./CheckpointList";
 import { Recommendation, RouteCards, reason } from "./RouteCards";
 
@@ -55,7 +56,7 @@ describe("route cards", () => {
 
 describe("checkpoint list", () => {
   it("lists every checkpoint of the selected route and its stops in mile order", () => {
-    render(<CheckpointList plan={plan} />);
+    renderWithRules(<CheckpointList plan={plan} />);
     const route = plan.routes.find((r) => r.id === plan.recommendation.route_id);
     const list = screen.getByTestId("checkpoints");
     expect(list.querySelectorAll("button[class*='grid']")).toHaveLength(route?.checkpoints.length ?? -1);
@@ -63,7 +64,7 @@ describe("checkpoint list", () => {
   });
 
   it("pins a checkpoint and moves the clock to its arrival when clicked", async () => {
-    render(<CheckpointList plan={plan} />);
+    renderWithRules(<CheckpointList plan={plan} />);
     const rows = screen.getByTestId("checkpoints").querySelectorAll<HTMLButtonElement>("button[class*='grid']");
     const row = rows[5];
     if (!row) throw new Error("too few checkpoints");

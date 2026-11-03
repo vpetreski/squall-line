@@ -1,5 +1,6 @@
 import type { Map as MapLibre } from "maplibre-gl";
 import { useEffect, useState } from "react";
+import { useDecimals } from "../api/hooks";
 import type { Level, Plan } from "../api/schema";
 import { LEVEL_COLOR, LEVEL_LABEL, LOAD_RULE_TEXT } from "../lib/risk";
 import { dayTime, zoneName } from "../lib/time";
@@ -35,6 +36,7 @@ function Row({ name, value, level }: { name: string; value: string; level?: Leve
 export function FocusCard({ map, plan }: { map: MapLibre; plan: Plan }) {
   const focus = useStore((s) => s.focus);
   const setFocus = useStore((s) => s.setFocus);
+  const decimals = useDecimals();
   const [, redraw] = useState(0);
 
   useEffect(() => {
@@ -98,10 +100,10 @@ export function FocusCard({ map, plan }: { map: MapLibre; plan: Plan }) {
           <Badge level={r.level} />
         </div>
         <div>
-          <Row name="Wind" value={`${w.wind_mph.toFixed(1)} mph`} level={r.wind} />
+          <Row name="Wind" value={`${w.wind_mph.toFixed(decimals.wind)} mph`} level={r.wind} />
           <Row name="Gusts" value={`${w.gust_mph.toFixed(0)} mph`} />
-          <Row name="Rain" value={`${w.rain_in_hr.toFixed(2)} in/hr`} level={r.rain} />
-          <Row name="Snow" value={`${w.snow_in_hr.toFixed(2)} in/hr`} level={r.snow} />
+          <Row name="Rain" value={`${w.rain_in_hr.toFixed(decimals.rain)} in/hr`} level={r.rain} />
+          <Row name="Snow" value={`${w.snow_in_hr.toFixed(decimals.snow)} in/hr`} level={r.snow} />
           <Row name="Sky" value={`${describeWeather(w.code)} · ${Math.round(w.temp_f)}°F`} />
         </div>
         {r.load_rule ? (
