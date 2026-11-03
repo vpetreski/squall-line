@@ -118,9 +118,9 @@ one, which usually means a departure within the same hour.
 Heavy loads raise the wind level: 45-54 mph with more than 30,000 lb on board is No Travel, and 35-44 mph with more
 than 40,000 lb is Severe. The worst of the three conditions sets the checkpoint's level.
 
-The bounds are kept exactly as the table writes them. Every band includes its lower bound, so 25 mph is Moderate and
-0.25 in/hr is High. No Travel is "≥ 55" for wind but "> 1.00" and "> 3.0" for rain and snow, so 1.00 in/hr of rain
-is still Severe and 55 mph of wind is already No Travel. Values are classified at the precision they are shown in:
+Every band includes its lower bound, so 25 mph is Moderate and 0.25 in/hr is High. Rain and snow are the exception
+at the top: No Travel starts above 1.00 in/hr and above 3.0 in/hr, so 1.00 in/hr of rain is still Severe while 55 mph
+of wind is already No Travel. Values are classified at the precision they are shown in:
 the checkpoint table and the checkpoint card give wind to 0.1 mph and rain and snow to 0.001 in/hr, so a rain total
 of 0.0999999 is the 0.100 the page displays. The server and the browser round the same way, half up on the float64
 product (`Math.round(value * 10**decimals) / 10**decimals`), so 24.95 mph is 25.0 and Moderate in the checkpoints,
@@ -138,10 +138,10 @@ length and the sampled levels become "miles at each level". Routes are ranked by
 4. lowest average risk (the mile-weighted level, 0 for Low to 4 for No Travel),
 5. shortest trip time.
 
-Keys 2 to 5 are the stated order. No Travel miles come first because a route through No Travel weather cannot be
+No Travel miles come first because a route through No Travel weather cannot be
 preferred to one without it, however the other keys compare. Miles are compared to a tenth of a mile, the average
-to a hundredth and the trip time to the minute, the precision they are shown at, so the reason given for every
-ranking (the first key on which the routes differ, shown on each card) can be read off the numbers on screen. Routes
+to a hundredth and the trip time to the minute, and each card's reason (the first key on which the routes differ)
+shows the deciding numbers at that precision, so it can always be read off the screen. Routes
 that tie on every key keep the engine's order, and the card says the route ties the recommended one. On a calm day
 every route is Low all the way and the fastest one wins. When every route meets No Travel weather, the plan still
 ranks them and says that no route is safe.
@@ -184,7 +184,8 @@ Processes do not share that count: on a deployment with several instances, each 
 spent, or Open-Meteo refuses or does not answer in time, `/api/plan` answers 503 with the exact Open-Meteo query;
 the browser sends it from its own address and asks again with the answer attached. The query covers every location
 of the plan, including those this server has cached, so the second attempt completes on any server instance,
-whatever its own cache and quota, unless that instance finds other routes. The server validates that answer and
+whatever its own cache and quota, unless that instance finds other routes or arrivals more than three hours later
+(the query asks for three spare hours). The server validates that answer and
 uses it for that one request only: it never enters the shared cache. If the browser's own request fails or takes
 more than 30 s, the page says the forecast could not be fetched.
 

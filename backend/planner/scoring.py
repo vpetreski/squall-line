@@ -9,13 +9,12 @@ and the mile-weighted average level, 0 (Low) to 4 (No Travel). Routes are ranked
 4. lowest average level,
 5. shortest trip time.
 
-Keys 2-5 are the stated preference order. Key 1 comes first because a route through No Travel weather cannot be
-preferred to one without it, however the other keys compare. Miles are compared to a tenth of a mile, the average
-to a hundredth and the trip time to the minute (the API's whole seconds, rounded half up as the page rounds them),
-the precision each is shown at, so the reason given for a ranking is always visible in the numbers shown. Routes
-that tie on every key keep the routing engine's order, fastest drive first, and their comparison names no key: the
-page says the route ties the recommended one on every measure. On a calm day every route is Low everywhere and the
-fastest one wins.
+Key 1 comes first because a route through No Travel weather cannot be preferred to one without it, however the other
+keys compare. Miles are compared to a tenth of a mile, the average to a hundredth and the trip time to the minute
+(the API's whole seconds, rounded half up as the page rounds them), and the reason given for a ranking shows the
+deciding numbers at that precision, so it can always be read on the page. Routes that tie on every key keep the
+routing engine's order, fastest drive first, and their comparison names no key: the page says the route ties the
+recommended one on every measure. On a calm day every route is Low everywhere and the fastest one wins.
 """
 
 from __future__ import annotations
