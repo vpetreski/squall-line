@@ -37,9 +37,13 @@ export function PlaceInput({
   const typed = useRef(false);
   const query = useDebounced(text.trim(), 180);
 
+  // Typing clears the place, so a place arriving while the field holds typed text was set from outside (a sample
+  // trip, the swap, the recorded storm): it replaces the typed text.
+  const placed = isSet(value);
   useEffect(() => {
+    if (placed) typed.current = false;
     if (!typed.current) setText(value.label);
-  }, [value.label]);
+  }, [placed, value.label]);
 
   const search = useQuery({
     queryKey: ["geocode", query.toLowerCase()],
