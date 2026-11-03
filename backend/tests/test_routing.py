@@ -10,7 +10,7 @@ import pytest
 from planner import routing
 from planner.geo import cumulative_miles, haversine_mi
 from planner.http import UpstreamError
-from planner.routing import Place, Route, TomTom, Truck, distinct, find_routes, overlap, side_points
+from planner.routing import Place, Route, TomTom, Truck, distinct, find_routes, overlap, route_names, side_points
 
 CHICAGO = Place(41.8832, -87.6324)
 DENVER = Place(39.7392, -104.9903)
@@ -178,3 +178,24 @@ def test_truck_weight_and_speed():
     t = Truck(load_lb=45_000)
     assert t.gross_kg == round(80_000 / 2.20462262)
     assert t.max_speed_mps == pytest.approx(105 / 3.6)
+
+
+def named(roads: dict[str, float]) -> Route:
+    pts = line(CHICAGO, DENVER, n=3)
+    return Route(points=pts, cum_mi=cumulative_miles(pts), cum_drive_s=np.zeros(3), roads=roads)
+
+
+def test_routes_on_the_same_main_roads_are_told_apart_by_the_road_only_one_takes():
+    a = named({"I-35": 300, "US-69": 100, "US-169": 30, "MO-13": 2})
+    b = named({"I-35": 280, "US-69": 120, "MO-13": 40})
+    c = named({"I-29": 400, "US-75": 100, "US-169": 60})
+    assert route_names([a, b, c]) == ["I-35 · US-69 via US-169", "I-35 · US-69 via MO-13", "I-29 · US-75"]
+
+
+def test_a_route_without_a_road_of_its_own_keeps_its_name():
+    a = named({"I-35": 300, "US-69": 100, "US-169": 30})
+    b = named({"I-35": 310, "US-69": 120})
+    close = named({"I-35": 290, "US-69": 110, "US-169": 27})  # within 5 mi of `a` on US-169
+    assert route_names([a, b]) == ["I-35 · US-69 via US-169", "I-35 · US-69"]
+    assert route_names([a, close]) == ["I-35 · US-69", "I-35 · US-69"]
+    assert route_names([named({}), named({"I-80": 10})]) == ["Local roads", "I-80"]

@@ -358,6 +358,29 @@ def distinct(candidates: Sequence[Route], limit: int = 3, threshold: float = DIS
     return chosen
 
 
+def route_names(routes: Sequence[Route], least_mi: float = 5.0) -> list[str]:
+    """Each route's two main roads, and where routes share those, the road that tells it apart ("via US-169").
+
+    The telling road is the one this route drives the most miles on beyond what any of its namesakes drive there;
+    under `least_mi` of difference the name stays as it is.
+    """
+    base = [route.name() for route in routes]
+    names = list(base)
+    for i, route in enumerate(routes):
+        twins = [other for j, other in enumerate(routes) if j != i and base[j] == base[i]]
+        if not twins:
+            continue
+        main = set(base[i].split(" · "))
+
+        def lead(road: str, route: Route = route, twins: list[Route] = twins) -> float:
+            return route.roads[road] - max(twin.roads.get(road, 0.0) for twin in twins)
+
+        best = max((road for road in route.roads if road not in main), key=lead, default=None)
+        if best is not None and lead(best) >= least_mi:
+            names[i] = f"{base[i]} via {best}"
+    return names
+
+
 def side_points(route: Route) -> list[Place]:
     """Two points off the route's midpoint, one on each side, at a seventh of the trip's straight-line length."""
     start, end = route.points[0], route.points[-1]

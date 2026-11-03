@@ -122,6 +122,7 @@ def plan(payload: PlanIn, now: datetime | None = None) -> dict:
     out_routes: list[dict[str, Any]] = []
     scores: list[scoring.Score] = []
     offset = 0
+    names = routing.route_names(routes)
     for i, (route, cps, route_etas, route_leads) in enumerate(zip(routes, placed, etas, leads, strict=True)):
         index = sampling.index[offset : offset + len(cps)]
         offset += len(cps)
@@ -139,7 +140,7 @@ def plan(payload: PlanIn, now: datetime | None = None) -> dict:
         out_routes.append(
             {
                 "id": route_id,
-                "name": route.name(),
+                "name": names[i],
                 "provider": route.provider,
                 "distance_mi": round(route.distance_mi, 1),
                 "drive_s": round(route.drive_s),
