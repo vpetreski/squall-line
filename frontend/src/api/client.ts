@@ -1,4 +1,4 @@
-import { ApiError, GeocodeOut, Plan, type PlanInput, Rules, type Suggestion } from "./schema";
+import { ApiError, GeocodeOut, Plan, type PlanInput, type Relay, Rules, type Suggestion } from "./schema";
 
 export class RequestFailed extends Error {
   constructor(
@@ -42,6 +42,27 @@ export function ping(): void {
 }
 
 const RELAY_ROUNDS = 2;
+const RELAY_TIMEOUT_MS = 30_000;
+const FORECAST_DOWN = "The forecast could not be fetched, by the server or by this browser. Try again in a minute.";
+
+/** The relayed Open-Meteo query, sent from the browser: its answer, or a RequestFailed a person can read. */
+async function relayed(relay: Relay, signal: AbortSignal | undefined): Promise<unknown> {
+  const timeout = AbortSignal.timeout(RELAY_TIMEOUT_MS);
+  let forecast: Response;
+  try {
+    forecast = await fetch(relay.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(relay.form),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+    if (forecast.ok) return await forecast.json();
+  } catch (exc) {
+    if (signal?.aborted) throw exc; // the plan was cancelled, which is not a failure to report
+    throw new RequestFailed(timeout.aborted ? "weather_timeout" : "weather_unavailable", FORECAST_DOWN, 0);
+  }
+  throw new RequestFailed("weather_unavailable", FORECAST_DOWN, forecast.status);
+}
 
 /**
  * Plan a trip. When the server cannot fetch the forecast itself (Open-Meteo's free quota is per IP address, and a
@@ -66,23 +87,14 @@ export async function planTrip(input: PlanInput, onStage: (stage: Stage) => void
         .json()
         .catch(() => null),
     );
-    const relay = parsed.success ? parsed.data.error.relay : null;
-    if (!relay || round >= RELAY_ROUNDS) throw await failure(response);
+    const error = parsed.success ? parsed.data.error : null;
+    if (!error?.relay) throw await failure(response);
+    // The server's message tells an API client how to relay; after the last round a person only needs to know
+    // that it did not work.
+    if (round >= RELAY_ROUNDS) throw new RequestFailed(error.code, FORECAST_DOWN, response.status);
     onStage("relaying");
-    const forecast = await fetch(relay.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(relay.form),
-      signal,
-    });
-    if (!forecast.ok) {
-      throw new RequestFailed(
-        "weather_unavailable",
-        "The forecast service is not answering. Try again in a minute.",
-        forecast.status,
-      );
-    }
+    const forecast = await relayed(error.relay, signal);
     onStage("assessing");
-    body = { ...input, weather: { locations: relay.locations, response: await forecast.json() } };
+    body = { ...input, weather: { locations: error.relay.locations, response: forecast } };
   }
 }

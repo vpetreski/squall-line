@@ -23,11 +23,21 @@ const relay = {
 
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-const limited = () => reply(503, { error: { code: "weather_rate_limited", message: "Out of quota.", relay } });
+// The server's own message, written for API clients.
+const limited = () =>
+  reply(503, {
+    error: {
+      code: "weather_rate_limited",
+      message:
+        "The forecast service's free quota for this server is used up for the moment. Send `relay.form` to `relay.url` and repeat the plan with the answer.",
+      relay,
+    },
+  });
+const PLAIN = "The forecast could not be fetched, by the server or by this browser. Try again in a minute.";
 
 type Call = { url: string; init: RequestInit };
 
-function serve(answers: ((call: Call) => Response)[]): Call[] {
+function serve(answers: ((call: Call) => Response | Promise<Response>)[]): Call[] {
   const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
@@ -70,15 +80,72 @@ describe("planTrip", () => {
     });
   });
 
-  it("stops relaying after two rounds", async () => {
+  it("stops relaying after two rounds and says so plainly", async () => {
     const forecast = () => reply(200, []);
     serve([limited, forecast, limited, forecast, limited]);
-    await expect(planTrip(input, () => undefined)).rejects.toMatchObject({ code: "weather_rate_limited", status: 503 });
+    await expect(planTrip(input, () => undefined)).rejects.toMatchObject({
+      code: "weather_rate_limited",
+      status: 503,
+      message: PLAIN,
+    });
   });
 
-  it("says so when the forecast service itself fails", async () => {
+  it("says so plainly when the forecast service itself fails", async () => {
     serve([limited, () => reply(500, {})]);
-    await expect(planTrip(input, () => undefined)).rejects.toMatchObject({ code: "weather_unavailable" });
+    await expect(planTrip(input, () => undefined)).rejects.toMatchObject({
+      code: "weather_unavailable",
+      message: PLAIN,
+    });
+  });
+
+  it("says so plainly when the browser cannot reach the forecast service", async () => {
+    serve([
+      limited,
+      () => {
+        throw new TypeError("Failed to fetch");
+      },
+    ]);
+    await expect(planTrip(input, () => undefined)).rejects.toMatchObject({
+      code: "weather_unavailable",
+      message: PLAIN,
+    });
+  });
+
+  it("gives up on the relayed query after 30 seconds", async () => {
+    const clock = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(clock.signal);
+    const sent = new Promise<void>((resolve) => {
+      serve([
+        limited,
+        ({ init }) => {
+          resolve();
+          return new Promise<Response>((_, reject) => {
+            init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+          });
+        },
+      ]);
+    });
+    const plan = planTrip(input, () => undefined);
+    await sent;
+    expect(timeout).toHaveBeenCalledWith(30_000);
+    clock.abort(new DOMException("The operation timed out.", "TimeoutError"));
+    await expect(plan).rejects.toMatchObject({ code: "weather_timeout", message: PLAIN });
+    timeout.mockRestore();
+  });
+
+  it("stays quiet when the plan is cancelled during the relay", async () => {
+    const cancel = new AbortController();
+    serve([
+      limited,
+      ({ init }) =>
+        new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+          cancel.abort();
+        }),
+    ]);
+    const error = await planTrip(input, () => undefined, cancel.signal).catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(RequestFailed);
+    expect(error).toMatchObject({ name: "AbortError" });
   });
 
   it("turns the error envelope into a RequestFailed with the field messages", async () => {
