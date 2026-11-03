@@ -1,5 +1,4 @@
-import type { Level, Miles } from "../api/schema";
-import { LEVELS } from "../api/schema";
+import type { Level } from "../api/schema";
 
 export const LEVEL_LABEL: Record<Level, string> = {
   low: "Low",
@@ -25,15 +24,6 @@ export const LEVEL_COLOR: Record<Level, string> = {
   severe: "#ef4444",
   no_travel: "#e040fb",
 };
-
-export const levelIndex = (level: Level): number => LEVELS.indexOf(level);
-export const levelAt = (index: number): Level => LEVELS[Math.min(Math.max(Math.round(index), 0), 4)] as Level;
-
-export function totalMiles(miles: Miles): number {
-  return LEVELS.reduce((sum, level) => sum + miles[level], 0);
-}
-
-export const CAUSE_LABEL: Record<string, string> = { wind: "wind", rain: "rain", snow: "snow" };
 
 /**
  * How many decimals wind, rain and snow are classified at (`decimals` in /api/rules), so they are shown at it: the

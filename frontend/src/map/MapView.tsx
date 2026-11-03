@@ -11,7 +11,7 @@ import {
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRules } from "../api/hooks";
-import type { Plan, Route } from "../api/schema";
+import type { Route } from "../api/schema";
 import { bounds, Line } from "../lib/geo";
 import { classifier, paint, raster } from "../lib/heatmap";
 import { decodePolyline } from "../lib/polyline";
@@ -505,5 +505,3 @@ export function MapView() {
     </section>
   );
 }
-
-export type { Plan };
