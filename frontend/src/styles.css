@@ -1,0 +1,307 @@
+/* MapLibre's sheet sits between Tailwind's reset and its utilities: it keeps its own spacing, and utilities on map
+   elements still win over it. */
+@layer theme, base, maplibre, components, utilities;
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css" layer(maplibre);
+
+@theme {
+  --font-display: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-bg: #08080a;
+  --color-panel: #0e0e11;
+  --color-raise: #16161b;
+  --color-line: #25252c;
+  --color-line-strong: #3b3b45;
+  --color-ink: #ededf0;
+  --color-muted: #9b9ba5;
+  --color-faint: #63636d;
+
+  --color-low: #4ade80;
+  --color-moderate: #facc15;
+  --color-high: #fb923c;
+  --color-severe: #ef4444;
+  --color-no-travel: #e040fb;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-bg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+  input,
+  button,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer components {
+  /* An expanded, heavy grotesque for display type; tabular figures everywhere numbers line up. */
+  .display {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    line-height: 0.95;
+  }
+  .label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .rule {
+    border-color: var(--color-line);
+  }
+  .field {
+    width: 100%;
+    background: var(--color-bg);
+    border: 1px solid var(--color-line-strong);
+    border-radius: 0;
+    padding: 0.625rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--color-ink);
+    transition: border-color 120ms;
+  }
+  .field::placeholder {
+    color: var(--color-faint);
+  }
+  .field:hover {
+    border-color: var(--color-muted);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-ink);
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--color-severe);
+  }
+  .seg {
+    margin: 0;
+    padding: 0;
+    min-inline-size: 0;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    border: 1px solid var(--color-line-strong);
+  }
+  .seg > button {
+    padding: 0.5rem 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--color-muted);
+    border-left: 1px solid var(--color-line-strong);
+  }
+  .seg > button:first-child {
+    border-left: none;
+  }
+  .seg > button:hover {
+    color: var(--color-ink);
+    background: var(--color-raise);
+  }
+  .seg > button[aria-pressed="true"] {
+    background: var(--color-ink);
+    color: var(--color-bg);
+    font-weight: 700;
+  }
+  .btn-primary {
+    background: var(--color-ink);
+    color: var(--color-bg);
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 0.95rem 1rem;
+    border: 1px solid var(--color-ink);
+    transition:
+      transform 80ms,
+      background 120ms;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #ffffff;
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .btn-primary:disabled {
+    opacity: 0.55;
+    cursor: progress;
+  }
+  .btn-ghost {
+    border: 1px solid var(--color-line-strong);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.45rem 0.65rem;
+    color: var(--color-muted);
+  }
+  .btn-ghost:hover {
+    color: var(--color-ink);
+    border-color: var(--color-ink);
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+}
+
+/* The map's own chrome, recoloured to match. These rules come after MapLibre's sheet and outrank its selectors. */
+.maplibregl-map .maplibregl-ctrl.maplibregl-ctrl-attrib,
+.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {
+  background: rgba(8, 8, 10, 0.82);
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.maplibregl-map .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button {
+  background-color: var(--color-raise);
+  filter: invert(1);
+}
+.maplibregl-map .maplibregl-ctrl-attrib a {
+  color: var(--color-muted);
+}
+.maplibregl-map .maplibregl-ctrl-group,
+.maplibregl-map .maplibregl-ctrl-group:not(:empty) {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line-strong);
+  border-radius: 0;
+  box-shadow: none;
+}
+.maplibregl-map .maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--color-line-strong);
+}
+.maplibregl-map .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1) brightness(0.9);
+}
+
+input[type="range"].time {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"].time::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--color-line-strong);
+}
+input[type="range"].time::-moz-range-track {
+  height: 2px;
+  background: var(--color-line-strong);
+}
+input[type="range"].time::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 22px;
+  margin-top: -10px;
+  background: var(--color-ink);
+  border: 0;
+}
+/* Keyboard focus rings the thumb, not the whole width of the track. */
+input[type="range"].time:focus-visible {
+  outline: none;
+}
+input[type="range"].time:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px var(--color-ink);
+}
+input[type="range"].time:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px var(--color-ink);
+}
+input[type="range"].time::-moz-range-thumb {
+  width: 14px;
+  height: 22px;
+  background: var(--color-ink);
+  border: 0;
+  border-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion has to win over every component's own timing */
+    transition-duration: 0ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above */
+    animation-duration: 0ms !important;
+  }
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+/* Route summaries pinned to the map. */
+.route-tag {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--color-line-strong);
+  background: rgba(14, 14, 17, 0.94);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.55);
+}
+.route-tag > span:last-child {
+  padding: 4px 7px;
+  border-left: 3px solid var(--level);
+}
+.route-tag-id {
+  font-family: var(--font-display);
+  font-stretch: 125%;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 4px 7px;
+  color: var(--color-ink);
+}
+.route-tag[data-selected="true"] {
+  border-color: var(--color-ink);
+  color: var(--color-ink);
+}
+.route-tag[data-selected="true"] .route-tag-id {
+  background: var(--color-ink);
+  color: var(--color-bg);
+}

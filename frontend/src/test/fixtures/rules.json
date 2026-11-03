@@ -1,0 +1,50 @@
+{
+  "levels": [
+    "low",
+    "moderate",
+    "high",
+    "severe",
+    "no_travel"
+  ],
+  "wind": {
+    "unit": "mph",
+    "moderate": 25,
+    "high": 35,
+    "severe": 45,
+    "no_travel": 55,
+    "no_travel_inclusive": true,
+    "decimals": 1
+  },
+  "rain": {
+    "unit": "in/hr",
+    "moderate": 0.1,
+    "high": 0.25,
+    "severe": 0.5,
+    "no_travel": 1.0,
+    "no_travel_inclusive": false,
+    "decimals": 3
+  },
+  "snow": {
+    "unit": "in/hr",
+    "moderate": 0.5,
+    "high": 1.0,
+    "severe": 2.0,
+    "no_travel": 3.0,
+    "no_travel_inclusive": false,
+    "decimals": 3
+  },
+  "load_rules": [
+    {
+      "code": "wind_45_over_30000_lb",
+      "level": "severe",
+      "over_lb": 30000,
+      "raised_to": "no_travel"
+    },
+    {
+      "code": "wind_35_over_40000_lb",
+      "level": "high",
+      "over_lb": 40000,
+      "raised_to": "severe"
+    }
+  ]
+}
