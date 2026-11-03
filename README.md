@@ -166,8 +166,10 @@ Open-Meteo's free API counts every location against a quota per IP address. A se
 out, and Open-Meteo then holds a request it cannot serve instead of refusing it. So the server tracks the quota
 from Open-Meteo's own rate-limit headers and never sends a request the quota cannot cover. When the quota is spent,
 or Open-Meteo refuses or does not answer in time, `/api/plan` answers 503 with the exact Open-Meteo query; the
-browser sends it from its own address and asks again with the answer attached. The server validates that answer
-and uses it for that one request only: it never enters the shared cache.
+browser sends it from its own address and asks again with the answer attached. The query covers every location of
+the plan, including those this server has cached, so the second attempt completes on any server instance, whatever
+its own cache and quota. The server validates that answer and uses it for that one request only: it never enters
+the shared cache.
 
 ## API
 

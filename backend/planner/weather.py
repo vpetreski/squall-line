@@ -17,8 +17,10 @@ hour (another load, interval or a later departure inside the same window costs n
 every answer are kept. A request that the remaining quota cannot cover is not sent: Open-Meteo admits it and then
 holds it until the quota refills. Instead, and whenever Open-Meteo refuses or does not answer in time, the plan is
 answered with the exact query (`WeatherRelay`): the browser sends it to Open-Meteo from its own address and
-returns the answer with the plan. An answer supplied that way serves that one request and never enters the
-shared cache.
+returns the answer with the plan. The query asks for every location of the plan that the supplied answer does
+not cover, cached in this process or not, because the browser's next attempt may reach another server process
+with its own cache and quota: one round from the browser is always enough. An answer supplied that way serves
+that one request and never enters the shared cache.
 """
 
 from __future__ import annotations
@@ -195,23 +197,29 @@ def fetch(
     given = supplied or {}
     series = {k: given[k] for k in keys if k in given and _covers(given[k], t_first, t_last)}
     used_supplied = len(series)
-    hits = cache.get_many([k for k in keys if k not in series])
+    # A relay asks for all of these, cached here or not: the next attempt may reach a process with a cold cache.
+    uncovered = list({k: loc for loc, k in zip(locations, keys, strict=True) if k not in series}.values())
+    hits = cache.get_many([_key(loc) for loc in uncovered])
     series |= {k: entry for k, entry in hits.items() if _covers(entry, t_first, t_last)}
     from_cache = len(series) - used_supplied
-    missing = list({k: loc for loc, k in zip(locations, keys, strict=True) if k not in series}.values())
+    missing = [loc for loc in uncovered if _key(loc) not in series]
     calls = 0
     if missing:
         if not QUOTA.known() and not QUOTA.blocked():
             _probe()
         if not QUOTA.covers(len(missing)):
             raise WeatherRelay(
-                "weather_rate_limited", "Open-Meteo's quota for this server cannot cover the plan", missing, first, last
+                "weather_rate_limited",
+                "Open-Meteo's quota for this server cannot cover the plan",
+                uncovered,
+                first,
+                last,
             )
         for i in range(0, len(missing), BATCH):
             try:
                 fresh = _download(missing[i : i + BATCH], first, last)
             except _Refused as exc:
-                raise WeatherRelay(exc.code, str(exc), missing[i:], first, last) from exc
+                raise WeatherRelay(exc.code, str(exc), uncovered, first, last) from exc
             calls += 1
             cache.set_many(fresh, CACHE_TTL_S)
             series.update(fresh)

@@ -210,6 +210,52 @@ def test_a_plan_the_quota_cannot_cover_is_relayed_without_asking(monkeypatch):
     assert len(sent[1]["latitude"].split(",")) == 40
 
 
+def _browser_fetch(relay: dict) -> dict[str, weather.Entry]:
+    """What the browser brings back for a relayed query: Open-Meteo's answer, read as a supplied forecast."""
+    answer = _open_meteo([])("weather", "POST", relay["url"], data=relay["form"]).json()
+    return weather.supplied_series(relay["locations"], answer)
+
+
+def test_a_relay_asks_for_every_location_not_supplied_even_those_cached_here(monkeypatch):
+    start = datetime.fromtimestamp(T0, UTC)
+    monkeypatch.setattr(weather, "request", _open_meteo([]))
+    warm, cold = Location(40.0, -100.0), Location(41.0, -100.0)
+    weather.fetch([warm], start, start)  # this process now has `warm` cached
+    weather.QUOTA.note(httpx.Response(429, json={"reason": "Minutely API request limit exceeded."}))
+    with pytest.raises(weather.WeatherRelay) as relayed:
+        weather.fetch([warm, cold], start, start)
+    relay = relayed.value.query
+    assert relay["locations"] == [[40.0, -100.0], [41.0, -100.0]]
+
+    # The browser's next attempt reaches another process: nothing cached there, and its quota spent too.
+    cache.clear()
+    monkeypatch.setattr(weather, "request", lambda *a, **k: pytest.fail("no request expected"))
+    _, stats = weather.fetch([warm, cold], start, start, supplied=_browser_fetch(relay))
+    assert stats == {"locations": 2, "downloaded": 0, "cached": 0, "supplied": 2, "requests": 0}
+
+
+def test_a_refused_second_batch_relays_the_first_batch_too(monkeypatch):
+    monkeypatch.setattr(weather, "BATCH", 1)
+    start = datetime.fromtimestamp(T0, UTC)
+    sent: list[dict] = []
+    open_meteo = _open_meteo(sent)
+
+    def refuse_the_second_batch(service, method, url, **kwargs):
+        if method == "POST" and sum("probe" not in m for m in sent) == 1:
+            return httpx.Response(429, json={"reason": "Minutely API request limit exceeded."})
+        return open_meteo(service, method, url, **kwargs)
+
+    monkeypatch.setattr(weather, "request", refuse_the_second_batch)
+    both = [Location(40.0, -100.0), Location(41.0, -100.0)]
+    with pytest.raises(weather.WeatherRelay) as relayed:
+        weather.fetch(both, start, start)
+    relay = relayed.value.query
+    assert relay["locations"] == [[40.0, -100.0], [41.0, -100.0]]
+    cache.clear()
+    _, stats = weather.fetch(both, start, start, supplied=_browser_fetch(relay))
+    assert stats["supplied"] == 2
+
+
 @pytest.mark.parametrize(
     ("status", "headers", "reason", "blocked_s"),
     [
