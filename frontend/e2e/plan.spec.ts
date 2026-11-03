@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { withOffset } from "../src/lib/time";
 import { fakeApi, PLAN, planRequests } from "./api";
 
 const recommended = PLAN.recommendation.route_id;
@@ -222,10 +223,16 @@ test.describe("the recorded storm", () => {
     const sent = await fakeApi(page);
     await page.goto("/?demo=storm");
     await expect(page.getByTestId("recorded")).toBeVisible();
+    const pressed = Date.now();
     await page.getByTestId("plan").click();
     await expect(page.getByTestId("recorded")).toHaveCount(0);
     const body = planRequests(sent)[0]?.postDataJSON();
     expect(body.origin.label).toBe(PLAN.request.origin.label);
-    expect(Date.parse(`${body.departure}Z`)).toBeGreaterThan(Date.now() - 36 * 3_600_000); // not the recorded day's
+    // Not the recording's departure but now: the next quarter hour at least a minute away, as wall time at the
+    // origin.
+    expect(body.departure).not.toBe(PLAN.request.departure.slice(0, 16));
+    const departure = Date.parse(withOffset(body.departure, PLAN.request.time_zone));
+    expect(departure).toBeGreaterThan(pressed);
+    expect(departure).toBeLessThanOrEqual(Date.now() + 16 * 60_000);
   });
 });
