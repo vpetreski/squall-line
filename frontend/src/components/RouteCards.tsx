@@ -169,9 +169,11 @@ export function RouteCards({ plan }: { plan: Plan }) {
         <RouteCard key={route.id} route={route} plan={plan} comparison={byRoute.get(route.id)} />
       ))}
       {plan.routes.length < 3 ? (
-        <p className="label normal-case tracking-normal">
-          Only {plan.routes.length} distinct truck route{plan.routes.length === 1 ? "" : "s"} exist between these
-          places.
+        <p className="label normal-case tracking-normal" data-testid="route-count">
+          {plan.routes.length === 1
+            ? "Only 1 distinct truck route was found"
+            : `Only ${plan.routes.length} distinct truck routes were found`}{" "}
+          between these places.
         </p>
       ) : null}
     </div>

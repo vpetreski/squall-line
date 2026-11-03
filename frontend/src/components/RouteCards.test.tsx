@@ -55,6 +55,19 @@ describe("route cards", () => {
     expect(useStore.getState().selectedId).toBe(other.id);
   });
 
+  it.each([
+    [1, "Only 1 distinct truck route was found between these places."],
+    [2, "Only 2 distinct truck routes were found between these places."],
+  ])("say how many routes were found when fewer than three (%i)", (count, text) => {
+    render(<RouteCards plan={{ ...plan, routes: plan.routes.slice(0, count) }} />);
+    expect(screen.getByTestId("route-count")).toHaveTextContent(text);
+  });
+
+  it("say nothing about the count when three routes were found", () => {
+    render(<RouteCards plan={plan} />);
+    expect(screen.queryByTestId("route-count")).toBeNull();
+  });
+
   it("state why the runner-up lost", () => {
     render(<Recommendation plan={plan} />);
     const runnerUp = plan.recommendation.comparisons[0];
