@@ -70,27 +70,45 @@ test("the checkpoint table fits its width and lines up with its header", async (
 
 test("the heatmap keeps up with the slider", async ({ page, isMobile }) => {
   test.skip(isMobile, "measured once, on the desktop layout");
+  // Every step waits for a frame, and a shared CI runner renders the map in software, a few hundred ms a frame.
+  test.setTimeout(120_000);
   await fakeApi(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Chicago → Atlanta" }).click();
   await expect(page.getByTestId("timebar")).toBeVisible();
-  // Drag the clock through all 48 hours, a step per animation frame, and watch for main-thread stalls.
-  const worst = await page.evaluate(async () => {
+  // Step the clock a quarter hour per animation frame, as a drag does, and time the app's own work for each step:
+  // painting the heatmap and handing it to its canvas (the "heatmap" performance measure). The first day of steps
+  // warms up the JIT and the second day's 96 are judged. The map's own rendering is left out: under software GL it
+  // says nothing about the app.
+  const times = await page.evaluate(async () => {
     const slider = document.querySelector<HTMLInputElement>("input[type=range].time");
     if (!slider) throw new Error("no slider");
-    const stalls: number[] = [];
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) stalls.push(entry.duration);
-    });
-    observer.observe({ type: "longtask", buffered: false });
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    for (let step = 0; step <= 192; step++) {
-      setter?.call(slider, String(step / 4));
+    const step = async (hours: number) => {
+      setter?.call(slider, String(hours));
       slider.dispatchEvent(new Event("input", { bubbles: true }));
       await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
+    };
+    let from = Number.POSITIVE_INFINITY;
+    const judged: number[] = [];
+    const keep = (entries: PerformanceEntryList) => {
+      for (const e of entries) if (e.name === "heatmap" && e.startTime >= from) judged.push(e.duration);
+    };
+    const observer = new PerformanceObserver((list) => keep(list.getEntries()));
+    observer.observe({ type: "measure" });
+    for (let k = 1; k <= 48; k++) await step(k / 2);
+    from = performance.now();
+    for (let k = 1; k <= 96; k++) await step(24 + k / 4);
+    keep(observer.takeRecords());
     observer.disconnect();
-    return Math.max(0, ...stalls);
+    return judged;
   });
-  expect(worst).toBeLessThan(200);
+  expect(times).toHaveLength(96); // one paint per step, every one of them measured
+  times.sort((a, b) => a - b);
+  const median = times[48] as number;
+  const p95 = times[91] as number;
+  // A laptop takes about 3 ms a step, and a 60 Hz frame is 16.7 ms. The bounds still hold with the CPU slowed six
+  // times (16 ms median), and a paint ten times slower than a laptop's fails them.
+  expect(median).toBeLessThan(25);
+  expect(p95).toBeLessThan(50);
 });

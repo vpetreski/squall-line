@@ -26,6 +26,7 @@ import { mapStyle } from "./style";
 setWorkerUrl(workerUrl);
 
 const LABELS_ABOVE = "place-state"; // data layers go under the place names, markers over them
+const HEATMAP_MEASURE = "heatmap";
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const LEVEL_MATCH: ExpressionSpecification = [
   "match",
@@ -458,8 +459,13 @@ export function MapView() {
     const context = el.getContext("2d");
     if (!source || !context || !grid) return;
     image.current ??= context.createImageData(el.width, el.height);
+    const started = performance.now();
     paint(plan.corridor, grid, layer, hours, image.current.data, classify);
     context.putImageData(image.current, 0, 0);
+    // The main thread's cost of one clock step, as a "heatmap" entry for performance observers (the speed test
+    // reads it); cleared at once so a long session does not pile entries up.
+    performance.measure(HEATMAP_MEASURE, { start: started });
+    performance.clearMeasures(HEATMAP_MEASURE);
     source.play();
     map.once("render", () => source.pause());
 
