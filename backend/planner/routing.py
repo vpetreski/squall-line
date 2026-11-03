@@ -239,26 +239,20 @@ class Valhalla:
         return data
 
     def _route(self, trip: dict) -> Route:
-        shape: list[FloatArray] = []
+        # Valhalla splits a trip into legs only at `break` locations, and only the two ends are breaks (a side point
+        # is `through`), so a trip is one leg; any other answer is malformed (a ValueError, as for any engine).
+        [leg] = trip["legs"]
+        points = decode_polyline(leg["shape"])
         index: list[int] = [0]
         seconds: list[float] = [0.0]
         roads: dict[str, float] = {}
-        offset = 0
-        for leg in trip["legs"]:
-            pts = decode_polyline(leg["shape"])
-            if shape:
-                pts = pts[1:]  # legs share their joining point
-                offset -= 1
-            for m in leg["maneuvers"]:
-                index.append(m["end_shape_index"] + offset)
-                seconds.append(seconds[-1] + float(m["time"]))
-                names = [n for n in m.get("street_names", []) if any(ch.isdigit() for ch in n)]
-                if names:
-                    road = _road(names[0].replace(" ", "-", 1))
-                    roads[road] = roads.get(road, 0.0) + m["length"]
-            offset += len(pts)
-            shape.append(pts)
-        points = np.vstack(shape)
+        for m in leg["maneuvers"]:
+            index.append(m["end_shape_index"])
+            seconds.append(seconds[-1] + float(m["time"]))
+            names = [n for n in m.get("street_names", []) if any(ch.isdigit() for ch in n)]
+            if names:
+                road = _road(names[0].replace(" ", "-", 1))
+                roads[road] = roads.get(road, 0.0) + m["length"]
         cum_mi = _scaled(points, trip["summary"]["length"])
         return Route(
             points=points,

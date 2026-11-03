@@ -280,6 +280,18 @@ def test_valhalla_routes_through_a_side_point_without_stopping_there(monkeypatch
     assert "alternates" not in body
 
 
+def test_a_valhalla_trip_of_more_than_one_leg_is_not_an_answer(monkeypatch):
+    # Only `break` locations start a leg, and only the two ends are breaks: a trip in two legs is malformed.
+    points = line(CHICAGO, DENVER, n=61)
+    one = valhalla_trip(points, 15)
+    two = valhalla_trip(points[:31], 7.5)["legs"] + valhalla_trip(points[30:], 7.5)["legs"]
+    split = {"legs": two, "summary": one["summary"]}
+    monkeypatch.setattr(routing, "request", lambda *a, **k: httpx.Response(200, json={"trip": split}))
+    with pytest.raises(ValueError, match="unpack"):
+        routing.Valhalla().via(CHICAGO, Place(41.0, -96.0), DENVER, Truck(0), NOW)
+    assert routing.Valhalla()._route(one).drive_s == pytest.approx(15 * 3600)
+
+
 @pytest.mark.parametrize(
     ("engine", "no_route", "failure"),
     [
