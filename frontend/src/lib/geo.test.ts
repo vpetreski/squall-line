@@ -31,6 +31,25 @@ describe("geometry", () => {
     expect(line.at(2)).toEqual([0, 3]);
   });
 
+  it("turns a fraction of the length on the ground into a fraction of the length on the map", () => {
+    // Due north from the equator to 60° N. Web Mercator stretches the north, so halfway on the ground (30° N) is
+    // well short of halfway on the map.
+    const north = new Line(Array.from({ length: 61 }, (_, lat): [number, number] => [lat, -90]));
+    const y = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+    expect(north.at(0.5)[0]).toBeCloseTo(30, 6);
+    expect(north.progress(0.5)).toBeCloseTo(y(30) / y(60), 6); // 0.417
+    expect(north.progress(0.25)).toBeCloseTo(y(15) / y(60), 6);
+    expect(north.progress(0)).toBe(0);
+    expect(north.progress(1)).toBeCloseTo(1, 12);
+    // Along the equator the two agree.
+    const east = new Line([
+      [0, 0],
+      [0, 1],
+      [0, 3],
+    ]);
+    expect(east.progress(0.5)).toBeCloseTo(0.5, 9);
+  });
+
   it("boxes points as [[west, south], [east, north]]", () => {
     expect(
       bounds([

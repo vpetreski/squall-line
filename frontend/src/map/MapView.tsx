@@ -20,6 +20,7 @@ import { duration } from "../lib/time";
 import { mileAt } from "../lib/timeline";
 import { useStore } from "../state/store";
 import { FocusCard } from "./FocusCard";
+import { routeGradient } from "./gradient";
 import { mapStyle } from "./style";
 
 // MapLibre finds its worker next to its own module by default, which a bundler moves; hand it the emitted file.
@@ -43,29 +44,6 @@ const LEVEL_MATCH: ExpressionSpecification = [
 ];
 
 export type RouteGeometry = { route: Route; line: Line };
-
-/** Colour along the route by the level of the checkpoint that stands for each stretch. */
-function gradient(route: Route): ExpressionSpecification {
-  const cps = route.checkpoints;
-  const first = cps[0];
-  if (!first) return ["interpolate", ["linear"], ["line-progress"], 0, LEVEL_COLOR.low, 1, LEVEL_COLOR.low];
-  const length = route.distance_mi || 1;
-  const stops: (number | string)[] = [];
-  let current = first.risk.level;
-  let previous = 0;
-  for (let i = 1; i < cps.length; i++) {
-    const here = cps[i];
-    const before = cps[i - 1];
-    if (!here || !before || here.risk.level === current) continue;
-    const at = Math.min(Math.max((before.mile + here.mile) / 2 / length, previous + 1e-6), 1);
-    stops.push(at, LEVEL_COLOR[here.risk.level]);
-    current = here.risk.level;
-    previous = at;
-  }
-  const base = LEVEL_COLOR[first.risk.level];
-  if (stops.length === 0) return ["interpolate", ["linear"], ["line-progress"], 0, base, 1, base];
-  return ["step", ["line-progress"], base, ...stops] as ExpressionSpecification;
-}
 
 function lineFeature(geometry: RouteGeometry): Feature {
   return {
@@ -368,7 +346,7 @@ export function MapView() {
           type: "line",
           source: `route-${id}`,
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-width": 3, "line-gradient": gradient(g.route) },
+          paint: { "line-width": 3, "line-gradient": routeGradient(g.route, g.line) },
         },
         LABELS_ABOVE,
       );
