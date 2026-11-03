@@ -18,8 +18,6 @@ from .schedule import HoursOfService, elapsed_s
 
 FloatArray = npt.NDArray[np.float64]
 
-INTERVALS_MI = (10, 25, 50)
-
 
 @dataclass(frozen=True, slots=True)
 class Checkpoint:

@@ -37,7 +37,6 @@ log = logging.getLogger(__name__)
 FloatArray = npt.NDArray[np.float64]
 
 LB_PER_KG = 2.20462262
-MPH_PER_KMH = 0.621371192
 VALHALLA_MAX_STRAIGHT_MI = 900.0
 DISTINCT_OVERLAP = 0.8
 DUPLICATE_OVERLAP = 0.97

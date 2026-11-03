@@ -46,8 +46,7 @@ known-first-party = ["config", "planner"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 testpaths = ["tests"]
-addopts = "-m 'not live' --strict-markers"
-markers = ["live: calls the real routing, geocoding and weather services (run with -m live)"]
+addopts = "--strict-markers"
 filterwarnings = ["error::RuntimeWarning"]
 
 [tool.coverage.run]

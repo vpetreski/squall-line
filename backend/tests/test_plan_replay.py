@@ -14,7 +14,7 @@ from django.test import Client
 from planner import corridor, http, routing, service, weather
 from planner.schemas import PlanIn, PlanOut
 
-from .replay import load, response
+from .replay import load
 
 CASES = ["chicago-atlanta", "denver-salt-lake-osrm", "sacramento-reno"]
 LEVELS = ["low", "moderate", "high", "severe", "no_travel"]
@@ -405,8 +405,3 @@ def test_a_recorded_answer_with_a_wrong_time_axis_is_rejected(replay):
     replay(shifted)
     with pytest.raises(weather.UpstreamError, match="unexpected hour"):
         plan(fixture)
-
-
-def test_response_helper_round_trips():
-    r = response(200, {"a": 1})
-    assert r.json() == {"a": 1}
