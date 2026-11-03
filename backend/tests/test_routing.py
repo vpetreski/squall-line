@@ -127,7 +127,7 @@ INDIANAPOLIS = Place(39.7684, -86.1581)
 
 @respx.mock
 @pytest.mark.parametrize("engine", list(ENGINES))
-def test_a_routing_read_timeout_is_not_retried_but_a_failed_connection_is(engine, monkeypatch):
+def test_a_routing_read_timeout_is_not_retried_but_a_failed_or_broken_connection_is(engine, monkeypatch):
     monkeypatch.setattr(http.time, "sleep", lambda s: None)
     upstream = respx.route().mock(side_effect=httpx.ReadTimeout("slow"))
     with pytest.raises(UpstreamError, match="did not answer in time"):
@@ -137,11 +137,12 @@ def test_a_routing_read_timeout_is_not_retried_but_a_failed_connection_is(engine
         ENGINES[engine]().via(CHICAGO, Place(40.5, -87.5), INDIANAPOLIS, Truck(0), NOW)
     assert upstream.call_count == 2
 
-    upstream.reset()
-    upstream.side_effect = httpx.ConnectError("refused")
-    with pytest.raises(UpstreamError, match="could not be reached"):
-        ENGINES[engine]().routes(CHICAGO, INDIANAPOLIS, Truck(0), NOW)
-    assert upstream.call_count == 2
+    for broken in (httpx.ConnectError("refused"), httpx.ReadError("reset"), httpx.RemoteProtocolError("closed")):
+        upstream.reset()
+        upstream.side_effect = broken
+        with pytest.raises(UpstreamError, match="could not be reached"):
+            ENGINES[engine]().routes(CHICAGO, INDIANAPOLIS, Truck(0), NOW)
+        assert upstream.call_count == 2
 
 
 def test_overlap_and_distinct():

@@ -41,9 +41,10 @@ VALHALLA_MAX_STRAIGHT_MI = 900.0
 DISTINCT_OVERLAP = 0.8
 DUPLICATE_OVERLAP = 0.97
 MAX_DETOUR_FACTOR = 1.5
-# A request that could not connect is tried again; one that timed out waiting for the answer is not, so a slow
-# engine costs one read timeout before the next engine is asked and a plan stays inside the function's time limit.
-RETRY_ON = (httpx.ConnectError, httpx.ConnectTimeout)
+# A request that could not connect, or whose connection broke before the answer came, is tried again; one that
+# timed out waiting for the answer is not, so a slow engine costs one read timeout before the next engine is asked
+# and a plan stays inside the function's time limit.
+RETRY_ON = (httpx.NetworkError, httpx.RemoteProtocolError, httpx.ConnectTimeout)
 
 
 @dataclass(frozen=True, slots=True)
