@@ -86,6 +86,26 @@ def test_tomtom_asks_for_a_truck_with_its_weight_and_speed(monkeypatch):
     assert sent["departAt"] == later.isoformat(timespec="seconds")
 
 
+def test_a_tomtom_route_through_a_side_point_is_asked_for_the_same_truck(monkeypatch):
+    sent: list[dict[str, Any]] = []
+
+    def answer(service: str, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        sent.append(dict(kwargs["params"], url=url))
+        return httpx.Response(200, json={"routes": [tomtom_route(line(CHICAGO, DENVER), 36000)]})
+
+    monkeypatch.setattr(routing, "request", answer)
+    truck = Truck(load_lb=40_000)
+    engine = TomTom("secret")
+    engine.routes(CHICAGO, DENVER, truck, NOW)
+    assert engine.via(CHICAGO, Place(41.0, -96.0), DENVER, truck, NOW) is not None
+    main, through = sent
+    assert "41.883200,-87.632400:41.000000,-96.000000:39.739200,-104.990300" in through["url"]
+    assert (main["vehicleLength"], main["vehicleWidth"], main["vehicleHeight"]) == (21.9, 2.6, 4.11)
+    assert {k: v for k, v in main.items() if k not in ("url", "maxAlternatives")} == {
+        k: v for k, v in through.items() if k != "url"
+    }
+
+
 def test_tomtom_no_route_is_an_empty_answer_and_other_errors_are_upstream_errors(monkeypatch):
     replies = iter(
         [

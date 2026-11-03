@@ -106,13 +106,12 @@ class TomTom:
     def __init__(self, key: str) -> None:
         self.key = key
 
-    def routes(self, origin: Place, destination: Place, truck: Truck, departure: datetime) -> list[Route]:
-        locations = f"{origin.lat:.6f},{origin.lon:.6f}:{destination.lat:.6f},{destination.lon:.6f}"
-        params: dict[str, str | int | float] = {
+    def _params(self, truck: Truck, departure: datetime) -> dict[str, str | int | float]:
+        """The truck and the departure, the same for the main request and every route through a side point."""
+        return {
             "key": self.key,
             "travelMode": "truck",
             "routeType": "fastest",
-            "maxAlternatives": 2,
             "traffic": "true",
             "departAt": _depart_at(departure),
             "vehicleWeight": truck.gross_kg,
@@ -124,6 +123,10 @@ class TomTom:
             "routeRepresentation": "polyline",
             "instructionsType": "coded",
         }
+
+    def routes(self, origin: Place, destination: Place, truck: Truck, departure: datetime) -> list[Route]:
+        locations = f"{origin.lat:.6f},{origin.lon:.6f}:{destination.lat:.6f},{destination.lon:.6f}"
+        params = self._params(truck, departure) | {"maxAlternatives": 2}
         response = request("routing", "GET", self.url.format(locations=locations), params=params)
         body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
         if response.status_code == 400 and "NO_ROUTE_FOUND" in str(body):
@@ -158,19 +161,9 @@ class TomTom:
 
     def via(self, origin: Place, via: Place, destination: Place, truck: Truck, departure: datetime) -> Route | None:
         locations = ":".join(f"{p.lat:.6f},{p.lon:.6f}" for p in (origin, via, destination))
-        params: dict[str, str | int | float] = {
-            "key": self.key,
-            "travelMode": "truck",
-            "routeType": "fastest",
-            "traffic": "true",
-            "departAt": _depart_at(departure),
-            "vehicleWeight": truck.gross_kg,
-            "vehicleMaxSpeed": truck.max_speed_kmh,
-            "vehicleCommercial": "true",
-            "routeRepresentation": "polyline",
-            "instructionsType": "coded",
-        }
-        response = request("routing", "GET", self.url.format(locations=locations), params=params)
+        response = request(
+            "routing", "GET", self.url.format(locations=locations), params=self._params(truck, departure)
+        )
         if response.status_code != 200:
             return None
         routes = response.json().get("routes", [])
