@@ -19,8 +19,8 @@ holds it until the quota refills. Instead, and whenever Open-Meteo refuses or do
 answered with the exact query (`WeatherRelay`): the browser sends it to Open-Meteo from its own address and
 returns the answer with the plan. The query asks for every location of the plan that the supplied answer does
 not cover, cached in this process or not, because the browser's next attempt may reach another server process
-with its own cache and quota: one round from the browser is always enough. An answer supplied that way serves
-that one request and never enters the shared cache.
+with its own cache and quota: one round from the browser is enough unless that process finds other routes. An
+answer supplied that way serves that one request and never enters the shared cache.
 """
 
 from __future__ import annotations

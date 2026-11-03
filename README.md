@@ -183,8 +183,8 @@ Processes do not share that count: on a deployment with several instances, each 
 spent, or Open-Meteo refuses or does not answer in time, `/api/plan` answers 503 with the exact Open-Meteo query;
 the browser sends it from its own address and asks again with the answer attached. The query covers every location
 of the plan, including those this server has cached, so the second attempt completes on any server instance,
-whatever its own cache and quota. The server validates that answer and uses it for that one request only: it never
-enters the shared cache.
+whatever its own cache and quota, unless that instance finds other routes. The server validates that answer and
+uses it for that one request only: it never enters the shared cache.
 
 ## API
 
