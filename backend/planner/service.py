@@ -18,7 +18,7 @@ from . import checkpoints, corridor, routing, scoring, weather
 from .geo import encode_polyline, points_at, simplify
 from .geocoding import time_zone
 from .http import cache_key, cached
-from .risk import Assessment, Risk, assess
+from .risk import RAIN, SNOW, WIND, Assessment, Risk, assess, half_up, half_up_array
 from .schedule import FMCSA, HoursOfService, elapsed_s, stops, timeline
 from .schemas import PlanIn
 
@@ -162,11 +162,12 @@ def plan(payload: PlanIn, now: datetime | None = None) -> dict:
                         "represents_mi": round(c.represents_mi, 2),
                         "lead_h": round(lead, 1),
                         "time_zone": time_zone(c.lat, c.lon),
+                        # Wind, rain and snow at the precision, and with the rounding, they are classified at.
                         "weather": {
-                            "wind_mph": round(float(at["wind_speed_10m"][k]), 1),
+                            "wind_mph": half_up(float(at["wind_speed_10m"][k]), WIND.decimals),
                             "gust_mph": round(float(at["wind_gusts_10m"][k]), 1),
-                            "rain_in_hr": round(float(rain[k]), 3),
-                            "snow_in_hr": round(float(at["snowfall"][k]), 3),
+                            "rain_in_hr": half_up(float(rain[k]), RAIN.decimals),
+                            "snow_in_hr": half_up(float(at["snowfall"][k]), SNOW.decimals),
                             "temp_f": round(float(at["temperature_2m"][k]), 1),
                             "code": int(at["weather_code"][k]),
                         },
@@ -228,9 +229,9 @@ def plan(payload: PlanIn, now: datetime | None = None) -> dict:
             "step_s": 3600,
             "frames": corridor.FRAMES,
             "risk": frames.risk.astype(int).tolist(),
-            "wind_mph": np.round(frames.wind_mph, 1).tolist(),
-            "rain_in_hr": np.round(frames.rain_in_hr, 3).tolist(),
-            "snow_in_hr": np.round(frames.snow_in_hr, 3).tolist(),
+            "wind_mph": half_up_array(frames.wind_mph, WIND.decimals).tolist(),
+            "rain_in_hr": half_up_array(frames.rain_in_hr, RAIN.decimals).tolist(),
+            "snow_in_hr": half_up_array(frames.snow_in_hr, SNOW.decimals).tolist(),
         },
         "meta": {
             "routing_provider": routes[0].provider,

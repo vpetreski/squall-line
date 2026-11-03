@@ -3,7 +3,19 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from planner.risk import LOAD_RULES, RAIN, SNOW, WIND, Risk, assess, assess_levels, rules_table, wind_level
+from planner.risk import (
+    LOAD_RULES,
+    RAIN,
+    SNOW,
+    WIND,
+    Risk,
+    assess,
+    assess_levels,
+    half_up,
+    half_up_array,
+    rules_table,
+    wind_level,
+)
 
 L, M, H, S, N = Risk.LOW, Risk.MODERATE, Risk.HIGH, Risk.SEVERE, Risk.NO_TRAVEL
 
@@ -113,6 +125,29 @@ def test_vectorized_boundaries():
 def test_values_are_classified_as_reported(wind, rain, snow, level):
     assert assess(wind, rain, snow, 0).level == level
     assert assess_levels([wind], [rain], [snow], 0).tolist() == [level]
+
+
+@pytest.mark.parametrize(
+    ("condition", "value", "level", "shown"),
+    [
+        # Each value times 10**decimals is exactly half-way in float64 (249.5, 549.5, ...): it rounds up, as the
+        # browser's Math.round(value * 10**decimals) / 10**decimals does.
+        ("wind", 24.95, Risk.MODERATE, 25.0),
+        ("wind", 54.95, Risk.NO_TRAVEL, 55.0),
+        ("rain", 0.2495, Risk.HIGH, 0.25),
+        ("rain", 0.4995, Risk.SEVERE, 0.5),
+        ("rain", 1.0005, Risk.NO_TRAVEL, 1.001),
+        ("snow", 0.4995, Risk.MODERATE, 0.5),
+        ("snow", 3.0005, Risk.NO_TRAVEL, 3.001),
+    ],
+)
+def test_half_way_values_round_up_on_every_path(condition, value, level, shown):
+    weather = {"wind": 0.0, "rain": 0.0, "snow": 0.0} | {condition: value}
+    assert assess(weather["wind"], weather["rain"], weather["snow"], 0).level == level
+    assert assess_levels([weather["wind"]], [weather["rain"]], [weather["snow"]], 0).tolist() == [level]
+    decimals = {"wind": WIND, "rain": RAIN, "snow": SNOW}[condition].decimals
+    assert half_up(value, decimals) == shown
+    assert half_up_array([value], decimals).tolist() == [shown]
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf")])

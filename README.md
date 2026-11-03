@@ -111,9 +111,11 @@ than 40,000 lb is Severe. The worst of the three conditions sets the checkpoint'
 The bounds are kept exactly as the table writes them. Every band includes its lower bound, so 25 mph is Moderate
 and 0.25 in/hr is High. No Travel is "≥ 55" for wind but "> 1.00" and "> 3.0" for rain and snow, so 1.00 in/hr of
 rain is still Severe and 55 mph of wind is already No Travel. Values are classified at the precision they are shown
-in (0.1 mph, 0.001 in/hr), so a rain total of 0.0999999 is the 0.100 the page displays. A missing value is an
-error, never Low. The thresholds and load rules are served at `/api/rules`, and the page draws its legend and the
-rules panel from that answer.
+in (0.1 mph, 0.001 in/hr), so a rain total of 0.0999999 is the 0.100 the page displays. The server and the browser
+round the same way, half up on the float64 product (`Math.round(value * 10**decimals) / 10**decimals`), so 24.95 mph
+is 25.0 and Moderate in the checkpoints, in the heatmap and in the numbers shown. A missing value is an error, never
+Low. The thresholds and load rules are served at `/api/rules`, and the page draws its legend and the rules panel
+from that answer.
 
 ### Ranking
 

@@ -302,6 +302,28 @@ def test_a_load_rule_raises_the_wind_level(replay):
     assert set(heavy["corridor"]["risk"][0]) == {3}
 
 
+def test_checkpoints_and_corridor_round_half_way_values_alike(replay):
+    fixture = load("sacramento-reno")
+    half_way = []
+    for e in fixture["exchanges"]:
+        if e["service"] == "weather":
+            body = json.loads(json.dumps(e["body"]))
+            for item in body:
+                hours = len(item["hourly"]["time"])
+                calm = [0.0] * hours
+                # 0.2495 * 1000 is 249.5 in float64: 0.250 in/hr, High, wherever it is classified or shown.
+                item["hourly"] |= {"rain": [0.2495] * hours, "showers": calm, "wind_speed_10m": calm, "snowfall": calm}
+            e = e | {"body": body}
+        half_way.append(e)
+    replay(half_way)
+    out = plan(fixture)
+    checkpoints = [c for r in out["routes"] for c in r["checkpoints"]]
+    assert {c["risk"]["level"] for c in checkpoints} == {"high"}
+    assert {c["weather"]["rain_in_hr"] for c in checkpoints} == {0.25}
+    assert {v for frame in out["corridor"]["risk"] for v in frame} == {2}
+    assert {v for frame in out["corridor"]["rain_in_hr"] for v in frame} == {0.25}
+
+
 def test_snapping_reports_its_grid(replay):
     fixture = load("chicago-atlanta")
     replay(fixture["exchanges"])

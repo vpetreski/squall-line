@@ -6,7 +6,10 @@ table writes them: wind at or above 55 mph, rain above 1.00 in/hr, snow above 3.
 rain is still Severe, while 55 mph of wind is already No Travel.
 
 Values are classified at the precision they are reported in (0.1 mph, 0.001 in/hr), so a rain total that adds
-up to 0.09999999 is the 0.10 it is shown as. A missing value is an error, never Low.
+up to 0.09999999 is the 0.10 it is shown as. Every path rounds the same way: the checkpoints, the corridor
+frames, the values the API reports and the browser's heatmap all round half up on the float64 product, as the
+browser's `Math.round(value * 10**decimals) / 10**decimals` does (`half_up`). So 24.95 mph, whose product with 10
+is 249.5 in float64, is 25.0 and Moderate on every path. A missing value is an error, never Low.
 
 Load rules raise the wind level for heavy trucks:
 
@@ -22,6 +25,18 @@ from enum import IntEnum
 
 import numpy as np
 import numpy.typing as npt
+
+
+def half_up(value: float, decimals: int) -> float:
+    """`value` at `decimals` places, half up: `floor(value * 10**decimals + 0.5) / 10**decimals` in float64."""
+    k = 10.0**decimals
+    return math.floor(value * k + 0.5) / k
+
+
+def half_up_array(values: npt.ArrayLike, decimals: int) -> npt.NDArray[np.float64]:
+    """`half_up` for a whole array, with the same float64 operations."""
+    k = 10.0**decimals
+    return np.asarray(np.floor(np.asarray(values, dtype=np.float64) * k + 0.5) / k, dtype=np.float64)
 
 
 class Risk(IntEnum):
@@ -55,7 +70,7 @@ class Scale:
     def level(self, value: float) -> Risk:
         if not math.isfinite(value):
             raise ValueError(f"cannot classify a missing value ({self.unit})")
-        value = round(value, self.decimals)
+        value = half_up(value, self.decimals)
         if value > self.no_travel or (self.no_travel_inclusive and value == self.no_travel):
             return Risk.NO_TRAVEL
         if value >= self.severe:
@@ -67,10 +82,10 @@ class Scale:
         return Risk.LOW
 
     def levels(self, values: npt.ArrayLike) -> npt.NDArray[np.int8]:
-        v = np.asarray(values, dtype=float)
+        v = np.asarray(values, dtype=np.float64)
         if not np.isfinite(v).all():
             raise ValueError(f"cannot classify missing values ({self.unit})")
-        v = np.round(v, self.decimals)
+        v = half_up_array(v, self.decimals)
         no_travel = (v >= self.no_travel) if self.no_travel_inclusive else (v > self.no_travel)
         out = np.select(
             [no_travel, v >= self.severe, v >= self.high, v >= self.moderate],
