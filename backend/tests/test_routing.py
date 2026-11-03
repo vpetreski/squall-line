@@ -161,6 +161,20 @@ def test_missing_alternatives_come_from_routes_through_side_points(monkeypatch):
     assert engine.via_calls == 2
 
 
+def test_an_engine_alternative_stays_while_side_points_fill_the_last_place(monkeypatch):
+    main = route(line(CHICAGO, DENVER, n=400), 15)
+    close_points = line(CHICAGO, DENVER, n=400)
+    close_points[160:200, 0] += 0.1  # leaves the main road for a tenth of the trip, about 11 km north
+    close = route(close_points, 15.5)
+    alike = route(line(CHICAGO, DENVER, n=333), 16)  # through a side point, back on the main road
+    north = route(line(CHICAGO, DENVER, bend=1.5), 17)
+    assert 0.8 <= overlap(close, main) < 0.97
+    engine = Fake("ok", [main, close], via=[alike, north])
+    monkeypatch.setattr(routing, "providers", lambda: [engine])
+    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == [main, close, north]
+    assert engine.via_calls == 2
+
+
 def test_providers_follow_the_settings_and_need_a_key_for_tomtom(settings):
     settings.ROUTING_PROVIDERS = ["tomtom", "valhalla", "osrm"]
     settings.TOMTOM_API_KEY = ""

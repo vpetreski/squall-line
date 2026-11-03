@@ -423,8 +423,13 @@ def find_routes(origin: Place, destination: Place, truck: Truck, departure: date
                 except (UpstreamError, ValueError, KeyError) as exc:
                     log.info("routing provider %s: no route through %s: %s", provider.name, place, exc)
                     extra = None
-                if extra and extra.drive_s <= fastest.drive_s * MAX_DETOUR_FACTOR:
-                    chosen = distinct([*chosen, extra])
+                # A route through a side point must differ from every route kept so far; the kept ones stay.
+                if (
+                    extra
+                    and extra.drive_s <= fastest.drive_s * MAX_DETOUR_FACTOR
+                    and all(overlap(extra, kept) < DISTINCT_OVERLAP for kept in chosen)
+                ):
+                    chosen.append(extra)
                 if len(chosen) == 3:
                     break
         return sorted(chosen, key=lambda r: r.drive_s)
