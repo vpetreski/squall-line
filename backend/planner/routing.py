@@ -20,6 +20,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import numpy as np
 import numpy.typing as npt
 from django.conf import settings
@@ -37,6 +38,9 @@ VALHALLA_MAX_STRAIGHT_MI = 900.0
 DISTINCT_OVERLAP = 0.8
 DUPLICATE_OVERLAP = 0.97
 MAX_DETOUR_FACTOR = 1.5
+# A request that could not connect is tried again; one that timed out waiting for the answer is not, so a slow
+# engine costs one read timeout before the next engine is asked and a plan stays inside the function's time limit.
+RETRY_ON = (httpx.ConnectError, httpx.ConnectTimeout)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +131,7 @@ class TomTom:
     def routes(self, origin: Place, destination: Place, truck: Truck, departure: datetime) -> list[Route]:
         locations = f"{origin.lat:.6f},{origin.lon:.6f}:{destination.lat:.6f},{destination.lon:.6f}"
         params = self._params(truck, departure) | {"maxAlternatives": 2}
-        response = request("routing", "GET", self.url.format(locations=locations), params=params)
+        response = request("routing", "GET", self.url.format(locations=locations), params=params, retry_on=RETRY_ON)
         body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
         if response.status_code == 400 and "NO_ROUTE_FOUND" in str(body):
             return []
@@ -162,7 +166,11 @@ class TomTom:
     def via(self, origin: Place, via: Place, destination: Place, truck: Truck, departure: datetime) -> Route | None:
         locations = ":".join(f"{p.lat:.6f},{p.lon:.6f}" for p in (origin, via, destination))
         response = request(
-            "routing", "GET", self.url.format(locations=locations), params=self._params(truck, departure)
+            "routing",
+            "GET",
+            self.url.format(locations=locations),
+            params=self._params(truck, departure),
+            retry_on=RETRY_ON,
         )
         if response.status_code != 200:
             return None
@@ -222,7 +230,9 @@ class Valhalla:
         }
 
     def _post(self, body: dict) -> dict:
-        response = request("routing", "POST", f"{settings.VALHALLA_URL}/route", json=body, pace=self.pace)
+        response = request(
+            "routing", "POST", f"{settings.VALHALLA_URL}/route", json=body, pace=self.pace, retry_on=RETRY_ON
+        )
         data = response.json() if response.content else {}
         if response.status_code != 200:
             raise UpstreamError("routing", f"Valhalla: {data.get('error', response.status_code)}", response.status_code)
@@ -281,7 +291,12 @@ class OSRM:
         coords = ";".join(f"{p.lon:.6f},{p.lat:.6f}" for p in places)
         params = {"overview": "full", "geometries": "polyline6", "annotations": "duration,distance", "steps": "true"}
         response = request(
-            "routing", "GET", f"{settings.OSRM_URL}/route/v1/driving/{coords}", params=params | extra, pace=self.pace
+            "routing",
+            "GET",
+            f"{settings.OSRM_URL}/route/v1/driving/{coords}",
+            params=params | extra,
+            pace=self.pace,
+            retry_on=RETRY_ON,
         )
         data = response.json() if response.content else {}
         if response.status_code == 400 and data.get("code") == "NoRoute":

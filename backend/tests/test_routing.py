@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import numpy as np
 import pytest
+import respx
 
-from planner import routing
+from planner import http, routing
 from planner.geo import cumulative_miles, haversine_mi
 from planner.http import UpstreamError
 from planner.routing import Place, Route, TomTom, Truck, distinct, find_routes, overlap, route_names, side_points
@@ -117,6 +119,29 @@ def test_tomtom_no_route_is_an_empty_answer_and_other_errors_are_upstream_errors
     assert TomTom("k").routes(CHICAGO, DENVER, Truck(0), NOW) == []
     with pytest.raises(UpstreamError, match="Forbidden"):
         TomTom("k").routes(CHICAGO, DENVER, Truck(0), NOW)
+
+
+ENGINES = {"tomtom": lambda: TomTom("k"), "valhalla": routing.Valhalla, "osrm": routing.OSRM}
+INDIANAPOLIS = Place(39.7684, -86.1581)
+
+
+@respx.mock
+@pytest.mark.parametrize("engine", list(ENGINES))
+def test_a_routing_read_timeout_is_not_retried_but_a_failed_connection_is(engine, monkeypatch):
+    monkeypatch.setattr(http.time, "sleep", lambda s: None)
+    upstream = respx.route().mock(side_effect=httpx.ReadTimeout("slow"))
+    with pytest.raises(UpstreamError, match="did not answer in time"):
+        ENGINES[engine]().routes(CHICAGO, INDIANAPOLIS, Truck(0), NOW)
+    assert upstream.call_count == 1
+    with contextlib.suppress(UpstreamError):
+        ENGINES[engine]().via(CHICAGO, Place(40.5, -87.5), INDIANAPOLIS, Truck(0), NOW)
+    assert upstream.call_count == 2
+
+    upstream.reset()
+    upstream.side_effect = httpx.ConnectError("refused")
+    with pytest.raises(UpstreamError, match="could not be reached"):
+        ENGINES[engine]().routes(CHICAGO, INDIANAPOLIS, Truck(0), NOW)
+    assert upstream.call_count == 2
 
 
 def test_overlap_and_distinct():
