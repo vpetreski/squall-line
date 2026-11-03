@@ -21,7 +21,7 @@ type Stop = [value: number, rgba: RGBA];
  */
 export const SUPERSAMPLE = 15;
 
-/** Colour ramps keyed to the rule thresholds, so a colour change on the map is a level change in the rules. */
+/** Colour ramps keyed to the rule thresholds: each threshold is a stop, in the colour of the level it opens. */
 export const RAMPS: Record<Exclude<LayerName, "risk">, Stop[]> = {
   wind: [
     [0, [56, 189, 248, 0]],
@@ -138,8 +138,8 @@ const smoothstep = (a: number, b: number, x: number) => {
 
 /**
  * Distance from every pixel to the nearest route, in units of the corridor's half-width there (1 = the edge).
- * Routes are walked in steps of about a pixel and each step is stamped as a capsule, so this costs the routes'
- * length times the corridor's width, not the image's area times the routes' points.
+ * Routes are walked in steps of a pixel or two and each step is stamped as a capsule, so the work grows with the
+ * routes' length and the square of the corridor's width, not with the image's area times the routes' points.
  */
 function corridorDistance(
   corridor: Pick<Corridor, "bounds" | "half_width_km">,
