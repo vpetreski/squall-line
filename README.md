@@ -12,8 +12,8 @@ spends at each risk level, a recommendation that says why, and a 48-hour weather
   Tailwind 4, TanStack Query, Zustand and Zod in the browser.
 - Truck routing from TomTom (weight, governed speed and truck restrictions), with keyless Valhalla and OSRM
   fallbacks; forecasts from Open-Meteo (NOAA HRRR for the first 48 hours over the US).
-- 231 backend tests (96% branch coverage, mypy strict), 55 unit and component tests and 26 Playwright end-to-end runs
-  (desktop and phone) in the browser.
+- 258 backend tests (98% of statements and branches, mypy strict), 94 unit and component tests and 29 Playwright
+  end-to-end runs (desktop and phone) in the browser.
 
 ## Running it
 
@@ -160,10 +160,11 @@ Each cell is drawn as 15 x 15 pixels, an odd number, so a pixel centre falls exa
 weather is interpolated in space between cell centres and in time between the hourly frames, and only then coloured.
 The risk layer classifies the interpolated weather with the same published rules, so hazard areas grow, shrink and
 drift as the clock moves instead of jumping hour by hour, and at every cell centre on every hour it is exactly the
-level the server computed (a unit test checks every cell of every frame of a real stormy plan). The image's edge
-follows the corridor around the routes, not the grid's staircase. Painting a frame takes about 3 ms (measured for
-the Chicago to Atlanta corridor on a laptop), well inside a 60 Hz frame, so dragging or playing the clock stays
-smooth; the trucks move along their routes with it.
+level the server computed (unit tests check every cell of every frame of two recorded plans, both the classifier
+and the pixel on each cell centre). The image's edge follows the corridor around the routes, not the grid's
+staircase. Computing a frame's pixels takes about 2.5 ms (the median over 960 frames of the Chicago to Atlanta
+corridor on a laptop), well inside a 60 Hz frame, so dragging or playing the clock stays smooth; the trucks move
+along their routes with it.
 
 ### A recorded storm
 
@@ -184,7 +185,8 @@ spent, or Open-Meteo refuses or does not answer in time, `/api/plan` answers 503
 the browser sends it from its own address and asks again with the answer attached. The query covers every location
 of the plan, including those this server has cached, so the second attempt completes on any server instance,
 whatever its own cache and quota, unless that instance finds other routes. The server validates that answer and
-uses it for that one request only: it never enters the shared cache.
+uses it for that one request only: it never enters the shared cache. If the browser's own request fails or takes
+more than 30 s, the page says the forecast could not be fetched.
 
 ## API
 
