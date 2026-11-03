@@ -108,11 +108,14 @@ def cache_key(prefix: str, *parts: object) -> str:
     return f"{prefix}:{digest}"
 
 
-def cached[T](key: str, ttl_s: int, compute: Callable[[], T]) -> tuple[T, bool]:
-    """The cached value for `key`, computing and storing it on a miss; the flag says whether it was a hit."""
+def cached[T](key: str, ttl_s: int | Callable[[T], int], compute: Callable[[], T]) -> tuple[T, bool]:
+    """The cached value for `key`, computing and storing it on a miss; the flag says whether it was a hit.
+
+    `ttl_s` is the lifetime in seconds, or a function that gives it for the value just computed.
+    """
     hit = cache.get(key)
     if hit is not None:
         return hit, True
     value = compute()
-    cache.set(key, value, ttl_s)
+    cache.set(key, value, ttl_s(value) if callable(ttl_s) else ttl_s)
     return value, False

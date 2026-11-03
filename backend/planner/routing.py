@@ -9,6 +9,10 @@ An engine's own alternatives are kept unless one shares 97% or more of its road 
 three remain, more candidates come from routing through a point to one side of the main route's midpoint, then
 from the far side, keeping only those that share less than 80% of their road with the routes already chosen and
 take at most 1.5 times as long.
+
+A side point that no route passes through is skipped. An answer is degraded when a request through a side point
+failed and fewer than three routes were found, or when an engine before the one that answered failed: the plan
+keeps such an answer for minutes, not hours, since asking again soon may give more routes or the better engine.
 """
 
 from __future__ import annotations
@@ -129,8 +133,12 @@ class TomTom:
         }
 
     def routes(self, origin: Place, destination: Place, truck: Truck, departure: datetime) -> list[Route]:
-        locations = f"{origin.lat:.6f},{origin.lon:.6f}:{destination.lat:.6f},{destination.lon:.6f}"
-        params = self._params(truck, departure) | {"maxAlternatives": 2}
+        found = self._calculate([origin, destination], self._params(truck, departure) | {"maxAlternatives": 2})
+        return [self._route(r) for r in found]
+
+    def _calculate(self, places: Sequence[Place], params: dict[str, str | int | float]) -> list[dict]:
+        """The routes TomTom found through `places` in order: none when it found no route, an error when it failed."""
+        locations = ":".join(f"{p.lat:.6f},{p.lon:.6f}" for p in places)
         response = request("routing", "GET", self.url.format(locations=locations), params=params, retry_on=RETRY_ON)
         body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
         if response.status_code == 400 and "NO_ROUTE_FOUND" in str(body):
@@ -138,7 +146,7 @@ class TomTom:
         if response.status_code != 200:
             message = (body.get("detailedError") or {}).get("message", f"HTTP {response.status_code}")
             raise UpstreamError("routing", f"TomTom: {message}", response.status_code)
-        return [self._route(r) for r in body.get("routes", [])]
+        return list(body.get("routes", []))
 
     def _route(self, data: dict) -> Route:
         points = np.array([[p["latitude"], p["longitude"]] for leg in data["legs"] for p in leg["points"]])
@@ -164,18 +172,8 @@ class TomTom:
         )
 
     def via(self, origin: Place, via: Place, destination: Place, truck: Truck, departure: datetime) -> Route | None:
-        locations = ":".join(f"{p.lat:.6f},{p.lon:.6f}" for p in (origin, via, destination))
-        response = request(
-            "routing",
-            "GET",
-            self.url.format(locations=locations),
-            params=self._params(truck, departure),
-            retry_on=RETRY_ON,
-        )
-        if response.status_code != 200:
-            return None
-        routes = response.json().get("routes", [])
-        return self._route(routes[0]) if routes else None
+        found = self._calculate([origin, via, destination], self._params(truck, departure))
+        return self._route(found[0]) if found else None
 
 
 def _depart_at(departure: datetime) -> str:
@@ -205,8 +203,10 @@ class Valhalla:
     def via(self, origin: Place, via: Place, destination: Place, truck: Truck, departure: datetime) -> Route | None:
         try:
             data = self._post(self._body([origin, via, destination], truck))
-        except UpstreamError:
-            return None
+        except UpstreamError as exc:
+            if exc.status == 400:  # Valhalla's answer when no path passes the point ("No path could be found")
+                return None
+            raise
         return self._route(data["trip"])
 
     def _body(self, places: Sequence[Place], truck: Truck) -> dict:
@@ -280,11 +280,7 @@ class OSRM:
         return [self._route(r, truck) for r in data.get("routes", [])]
 
     def via(self, origin: Place, via: Place, destination: Place, truck: Truck, departure: datetime) -> Route | None:
-        try:
-            data = self._get([origin, via, destination], {})
-        except UpstreamError:
-            return None
-        routes = data.get("routes", [])
+        routes = self._get([origin, via, destination], {}).get("routes", [])
         return self._route(routes[0], truck) if routes else None
 
     def _get(self, places: Sequence[Place], extra: dict[str, str]) -> dict:
@@ -408,7 +404,15 @@ def side_points(route: Route) -> list[Place]:
     ]
 
 
-def find_routes(origin: Place, destination: Place, truck: Truck, departure: datetime) -> list[Route]:
+@dataclass(slots=True)
+class Found:
+    """The routes, fastest first, and whether the answer is degraded (see the module's description)."""
+
+    routes: list[Route]
+    degraded: bool = False
+
+
+def find_routes(origin: Place, destination: Place, truck: Truck, departure: datetime) -> Found:
     """Up to three distinct routes, fastest first, from the first provider that answers."""
     errors: list[str] = []
     for provider in providers():
@@ -423,13 +427,15 @@ def find_routes(origin: Place, destination: Place, truck: Truck, departure: date
             continue
         # The engine's own alternatives are meant to differ; drop only near-duplicates of them.
         chosen = distinct(sorted(routes, key=lambda r: r.drive_s), threshold=DUPLICATE_OVERLAP)
+        side_failed = False
         if len(chosen) < 3:
             fastest = chosen[0]
             for place in side_points(fastest):
                 try:
                     extra = provider.via(origin, place, destination, truck, departure)
                 except (UpstreamError, ValueError, KeyError) as exc:
-                    log.info("routing provider %s: no route through %s: %s", provider.name, place, exc)
+                    log.warning("routing provider %s: the request through %s failed: %s", provider.name, place, exc)
+                    side_failed = True
                     extra = None
                 # A route through a side point must differ from every route kept so far; the kept ones stay.
                 if (
@@ -440,7 +446,8 @@ def find_routes(origin: Place, destination: Place, truck: Truck, departure: date
                     chosen.append(extra)
                 if len(chosen) == 3:
                     break
-        return sorted(chosen, key=lambda r: r.drive_s)
+        degraded = bool(errors) or (side_failed and len(chosen) < 3)
+        return Found(sorted(chosen, key=lambda r: r.drive_s), degraded)
     if errors:
         raise UpstreamError("routing", "; ".join(errors))
-    return []
+    return Found([])

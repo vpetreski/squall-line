@@ -10,7 +10,7 @@ import pytest
 import respx
 
 from planner import http, routing
-from planner.geo import cumulative_miles, haversine_mi
+from planner.geo import cumulative_miles, encode_polyline, haversine_mi
 from planner.http import UpstreamError
 from planner.routing import Place, Route, TomTom, Truck, distinct, find_routes, overlap, route_names, side_points
 
@@ -165,7 +165,9 @@ def test_side_points_lie_on_both_sides_of_the_midpoint():
 
 
 class Fake:
-    def __init__(self, name: str, routes: list[Route] | Exception, via: list[Route | None] | None = None):
+    def __init__(
+        self, name: str, routes: list[Route] | Exception, via: list[Route | Exception | None] | None = None
+    ) -> None:
         self.name = name
         self._routes = routes
         self._via = list(via or [])
@@ -178,14 +180,19 @@ class Fake:
 
     def via(self, *args: Any) -> Route | None:
         self.via_calls += 1
-        return self._via.pop(0) if self._via else None
+        answer = self._via.pop(0) if self._via else None
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
 
 
 def test_the_first_engine_that_answers_is_used(monkeypatch):
     good = [route(line(CHICAGO, DENVER, bend=b), 15 + b) for b in (0, 1.5, -1.5)]
     engines = [Fake("broken", UpstreamError("routing", "down")), Fake("odd", ValueError("times")), Fake("ok", good)]
     monkeypatch.setattr(routing, "providers", lambda: engines)
-    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == sorted(good, key=lambda r: r.drive_s)
+    found = find_routes(CHICAGO, DENVER, Truck(0), NOW)
+    assert found.routes == sorted(good, key=lambda r: r.drive_s)
+    assert found.degraded  # the engines before it failed: worth asking them again soon
 
 
 def test_every_engine_failing_is_an_upstream_error_and_no_route_is_empty(monkeypatch):
@@ -193,7 +200,7 @@ def test_every_engine_failing_is_an_upstream_error_and_no_route_is_empty(monkeyp
     with pytest.raises(UpstreamError, match="a: down"):
         find_routes(CHICAGO, DENVER, Truck(0), NOW)
     monkeypatch.setattr(routing, "providers", lambda: [Fake("a", [])])
-    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == []
+    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == routing.Found([])
 
 
 def test_missing_alternatives_come_from_routes_through_side_points(monkeypatch):
@@ -202,7 +209,7 @@ def test_missing_alternatives_come_from_routes_through_side_points(monkeypatch):
     too_long = route(line(CHICAGO, DENVER, bend=-1.5), 30)  # more than 1.5 times the fastest
     engine = Fake("ok", [main], via=[north, too_long])
     monkeypatch.setattr(routing, "providers", lambda: [engine])
-    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == [main, north]
+    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == routing.Found([main, north], degraded=False)
     assert engine.via_calls == 2
 
 
@@ -216,8 +223,90 @@ def test_an_engine_alternative_stays_while_side_points_fill_the_last_place(monke
     assert 0.8 <= overlap(close, main) < 0.97
     engine = Fake("ok", [main, close], via=[alike, north])
     monkeypatch.setattr(routing, "providers", lambda: [engine])
-    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == [main, close, north]
+    assert find_routes(CHICAGO, DENVER, Truck(0), NOW).routes == [main, close, north]
     assert engine.via_calls == 2
+
+
+def test_a_failed_request_through_a_side_point_leaves_the_answer_degraded(monkeypatch):
+    main = route(line(CHICAGO, DENVER), 15)
+    north = route(line(CHICAGO, DENVER, bend=1.5), 17)
+    engine = Fake("ok", [main], via=[UpstreamError("routing", "busy"), north])
+    monkeypatch.setattr(routing, "providers", lambda: [engine])
+    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == routing.Found([main, north], degraded=True)
+    assert engine.via_calls == 2
+
+
+def test_a_failed_side_point_does_not_matter_once_three_routes_are_found(monkeypatch):
+    main = route(line(CHICAGO, DENVER, n=400), 15)
+    close_points = line(CHICAGO, DENVER, n=400)
+    close_points[160:200, 0] += 0.1
+    close = route(close_points, 15.5)
+    north = route(line(CHICAGO, DENVER, bend=1.5), 17)
+    engine = Fake("ok", [main, close], via=[ValueError("an answer that does not add up"), north])
+    monkeypatch.setattr(routing, "providers", lambda: [engine])
+    assert find_routes(CHICAGO, DENVER, Truck(0), NOW) == routing.Found([main, close, north], degraded=False)
+
+
+def valhalla_trip(points: np.ndarray, hours: float) -> dict[str, Any]:
+    length_mi = float(cumulative_miles(points)[-1])
+    half = len(points) // 2
+    maneuvers = [
+        {"end_shape_index": half, "time": hours * 1800, "length": length_mi / 2, "street_names": ["I 80"]},
+        {"end_shape_index": len(points) - 1, "time": hours * 1800, "length": length_mi / 2, "street_names": []},
+    ]
+    return {
+        "legs": [{"shape": encode_polyline(points), "maneuvers": maneuvers}],
+        "summary": {"length": length_mi, "time": hours * 3600},
+    }
+
+
+def test_valhalla_routes_through_a_side_point_without_stopping_there(monkeypatch):
+    sent: list[dict[str, Any]] = []
+    side = Place(41.0, -96.0)
+    trip = valhalla_trip(line(CHICAGO, DENVER, bend=1.0), 16)
+
+    def answer(service: str, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        sent.append(kwargs["json"])
+        return httpx.Response(200, json={"trip": trip})
+
+    monkeypatch.setattr(routing, "request", answer)
+    got = routing.Valhalla().via(CHICAGO, side, DENVER, Truck(40_000), NOW)
+    assert got is not None
+    assert got.drive_s == pytest.approx(16 * 3600)
+    assert got.roads["I-80"] == pytest.approx(got.distance_mi / 2)
+    [body] = sent
+    assert [loc["type"] for loc in body["locations"]] == ["break", "through", "break"]
+    assert (body["locations"][1]["lat"], body["locations"][1]["lon"]) == (41.0, -96.0)
+    assert "alternates" not in body
+
+
+@pytest.mark.parametrize(
+    ("engine", "no_route", "failure"),
+    [
+        (
+            "tomtom",
+            httpx.Response(400, json={"detailedError": {"code": "NO_ROUTE_FOUND", "message": "No route found."}}),
+            httpx.Response(500, json={"detailedError": {"message": "Internal error"}}),
+        ),
+        (
+            "valhalla",
+            httpx.Response(400, json={"error_code": 442, "error": "No path could be found for input"}),
+            httpx.Response(503, json={"error": "busy"}),
+        ),
+        (
+            "osrm",
+            httpx.Response(400, json={"code": "NoRoute", "message": "Impossible route between points"}),
+            httpx.Response(502, json={"message": "Bad gateway"}),
+        ),
+    ],
+)
+def test_a_side_point_without_a_route_is_none_and_a_failure_is_an_error(engine, no_route, failure, monkeypatch):
+    replies = iter([no_route, failure])
+    monkeypatch.setattr(routing, "request", lambda *a, **k: next(replies))
+    side = Place(40.5, -87.5)
+    assert ENGINES[engine]().via(CHICAGO, side, INDIANAPOLIS, Truck(0), NOW) is None
+    with pytest.raises(UpstreamError):
+        ENGINES[engine]().via(CHICAGO, side, INDIANAPOLIS, Truck(0), NOW)
 
 
 def test_providers_follow_the_settings_and_need_a_key_for_tomtom(settings):

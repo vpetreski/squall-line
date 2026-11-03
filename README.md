@@ -71,7 +71,11 @@ tractor and dry van plus the load), its dimensions and a 65 mph governed speed. 
 more of its road with a faster route is dropped. When fewer than three remain, more candidates come from routing
 through a point to one side of the main route's midpoint, then the other side; a candidate is kept only if it
 shares less than 80% of its road with the routes already chosen and takes at most 1.5 times as long. Two places
-with only one or two reasonable roads between them get one or two routes, and the page says so.
+with only one or two reasonable roads between them get one or two routes, and the page says how many were found.
+
+The routes for a trip are cached for six hours (by origin, destination, load to the nearest 1,000 lb and departure
+hour). An answer that came from a fallback engine because the one before it failed, or that has fewer than three
+routes because a request through a side point failed, is kept for ten minutes only.
 
 ### When the truck is where
 

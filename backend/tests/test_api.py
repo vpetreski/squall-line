@@ -103,7 +103,7 @@ def test_plan_errors_explain_themselves(client, changes, code, monkeypatch):
 
 
 def test_no_route_and_routing_outages(client, monkeypatch):
-    monkeypatch.setattr(routing, "find_routes", lambda *a: [])
+    monkeypatch.setattr(routing, "find_routes", lambda *a: routing.Found([]))
     r = post(client, trip())
     assert (r.status_code, r.json()["error"]["code"]) == (422, "no_route")
 

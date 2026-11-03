@@ -11,7 +11,7 @@ import pytest
 from django.core.cache import cache
 from django.test import Client
 
-from planner import corridor, service, weather
+from planner import corridor, http, routing, service, weather
 from planner.schemas import PlanIn, PlanOut
 
 from .replay import load, response
@@ -131,6 +131,40 @@ def test_a_heavier_load_reuses_routes_and_weather_when_the_bucket_matches(replay
     out = plan(fixture, load_lb=fixture["payload"]["load_lb"] + 400)  # same 1,000 lb routing bucket
     assert out["meta"]["cached_routes"]
     assert out["meta"]["weather_downloaded"] == 0
+
+
+def test_routes_are_kept_for_hours_unless_the_answer_is_degraded(replay, monkeypatch, settings):
+    fixture = load("sacramento-reno")
+    lifetimes: dict[str, int] = {}
+    shared = http.cache
+
+    class Recording:
+        """The cache behind `http.cached`, noting the lifetime each kind of entry is stored for."""
+
+        def get(self, key: str) -> Any:
+            return shared.get(key)
+
+        def set(self, key: str, value: Any, timeout: int) -> None:
+            lifetimes[key.split(":")[0]] = timeout
+            shared.set(key, value, timeout)
+
+    monkeypatch.setattr(http, "cache", Recording())
+    replay(fixture["exchanges"])
+    complete = plan(fixture)
+    assert lifetimes["routes2"] == service.ROUTE_CACHE_S == 6 * 3600
+
+    # The first engine fails and the next one answers with the same routes: they are kept for ten minutes only.
+    cache.clear()
+    replay(fixture["exchanges"])
+    settings.ROUTING_PROVIDERS = ["osrm", "valhalla"]
+
+    def down(*args: Any) -> None:
+        raise http.UpstreamError("routing", "OSRM: busy", 503)
+
+    monkeypatch.setattr(routing.OSRM, "routes", down)
+    fallback = plan(fixture)
+    assert fallback["routes"] == complete["routes"]
+    assert lifetimes["routes2"] == service.ROUTE_RETRY_S == 10 * 60
 
 
 def _refuse_weather(exchanges: list[dict[str, Any]], status: int = 429) -> list[dict[str, Any]]:

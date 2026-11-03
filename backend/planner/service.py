@@ -23,6 +23,7 @@ from .schedule import FMCSA, HoursOfService, elapsed_s, stops, timeline
 from .schemas import PlanIn
 
 ROUTE_CACHE_S = 6 * 3600
+ROUTE_RETRY_S = 10 * 60  # a degraded routing answer (see planner.routing) is asked for again this soon
 MIN_CORRIDOR_CELLS = 120
 MAX_CORRIDOR_CELLS = 200
 ATTRIBUTION = {
@@ -73,7 +74,7 @@ def plan(payload: PlanIn, now: datetime | None = None) -> dict:
     hos = FMCSA if payload.hours_of_service else None
 
     key = cache_key(
-        "routes",
+        "routes2",
         round(origin.lat, 4),
         round(origin.lon, 4),
         round(destination.lat, 4),
@@ -83,9 +84,12 @@ def plan(payload: PlanIn, now: datetime | None = None) -> dict:
         settings.ROUTING_PROVIDERS,
         bool(settings.TOMTOM_API_KEY),
     )
-    routes, routes_cached = cached(
-        key, ROUTE_CACHE_S, lambda: routing.find_routes(origin, destination, truck, departure)
+    found, routes_cached = cached(
+        key,
+        lambda f: ROUTE_RETRY_S if f.degraded else ROUTE_CACHE_S,
+        lambda: routing.find_routes(origin, destination, truck, departure),
     )
+    routes = found.routes
     if not routes:
         raise PlanError("no_route", "No truck route was found between these places.")
     timings["routing"] = _ms(clock)
